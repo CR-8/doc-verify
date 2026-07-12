@@ -21,6 +21,7 @@ import { LoadingState } from "@/components/shared/loading-state";
 type SignatureType = "type" | "draw" | "upload";
 
 interface SignatureData {
+  valid: boolean;
   documentId: string;
   documentTitle: string;
   status: string;
@@ -186,7 +187,7 @@ export default function SignPage() {
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
                 <p className="text-muted-foreground">Document</p>
-                <p className="font-medium">{docInfo.title}</p>
+                <p className="font-medium">{sigData.documentTitle}</p>
               </div>
               <div>
                 <p className="text-muted-foreground">Signed as</p>
@@ -221,14 +222,14 @@ export default function SignPage() {
               <CardTitle className="text-xl">Sign Document</CardTitle>
             </div>
             <CardDescription>
-              You have been requested to sign &ldquo;{docInfo.title}&rdquo;.
+               You have been requested to sign &ldquo;{sigData.documentTitle}&rdquo;.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="rounded-lg border bg-muted/50 p-4 text-sm">
-              <p className="font-medium">{docInfo.title}</p>
+              <p className="font-medium">{sigData.documentTitle}</p>
               <p className="mt-1 text-muted-foreground">
-                Status: {docInfo.status}
+                Status: {sigData.status}
               </p>
             </div>
 

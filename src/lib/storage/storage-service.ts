@@ -4,6 +4,7 @@ import { getKeyManagementService } from "@/lib/crypto/key-management";
 import { encryptToBuffer, decryptFromBuffer } from "@/lib/crypto/encryption";
 import { v4 as uuid } from "uuid";
 import { AppError, ErrorCodes } from "@/constants/errors";
+import { logger } from "@/lib/logger/logger";
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME || "",
@@ -11,10 +12,12 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET || "",
 });
 
-const tempStore = new Map<string, Buffer>();
-
 function publicId(prefix: string, id: string, suffix: string): string {
   return `${prefix}/${id}/${suffix}`;
+}
+
+function tempId(uploadId: string): string {
+  return publicId(siteConfig.storage.tempPrefix, uploadId, "upload");
 }
 
 export const storageService = {
@@ -30,18 +33,67 @@ export const storageService = {
     if (buffer.slice(0, 5).toString() !== "%PDF-") {
       throw new AppError(ErrorCodes.INVALID_FILE_TYPE, "File is not a valid PDF", 400);
     }
-    tempStore.set(uploadId, buffer);
+    // Persist to shared storage rather than process memory so the two-step
+    // upload → complete flow survives across requests, instances and restarts.
+    const id = tempId(uploadId);
+    const b64 = buffer.toString("base64");
+    logger.info("Storage: uploading temp file to Cloudinary", {
+      action: "storage_temp_upload",
+      metadata: { uploadId, publicId: id, bytes: buffer.length },
+    });
+    try {
+      const result = await cloudinary.uploader.upload(`data:application/pdf;base64,${b64}`, {
+        public_id: id,
+        resource_type: "raw",
+      });
+      logger.info("Storage: temp file uploaded", {
+        action: "storage_temp_upload_ok",
+        metadata: { uploadId, publicId: result.public_id, url: result.secure_url },
+      });
+    } catch (error) {
+      logger.error("Storage: temp upload failed", {
+        action: "storage_temp_upload_error",
+        metadata: { uploadId, publicId: id, error: error instanceof Error ? error.message : String(error) },
+      });
+      throw error;
+    }
   },
 
   async verifyAndFinalize(uploadId: string): Promise<{ buffer: Buffer; fileSize: number }> {
-    const buffer = tempStore.get(uploadId);
-    if (!buffer) {
+    const id = tempId(uploadId);
+    logger.info("Storage: looking up temp file", {
+      action: "storage_temp_lookup",
+      metadata: { uploadId, publicId: id },
+    });
+    const resource = await cloudinary.api
+      .resource(id, { resource_type: "raw" })
+      .catch((error) => {
+        logger.warn("Storage: temp resource lookup failed", {
+          action: "storage_temp_lookup_miss",
+          metadata: { uploadId, publicId: id, error: error instanceof Error ? error.message : String(error) },
+        });
+        return null;
+      });
+    if (!resource) {
       throw new AppError(ErrorCodes.NOT_FOUND, "Upload not found. Please upload again.", 404);
     }
+    const response = await fetch(resource.secure_url);
+    if (!response.ok) {
+      logger.warn("Storage: temp file download failed", {
+        action: "storage_temp_download_fail",
+        metadata: { uploadId, publicId: id, status: response.status },
+      });
+      throw new AppError(ErrorCodes.NOT_FOUND, "Upload not found. Please upload again.", 404);
+    }
+    const buffer = Buffer.from(await response.arrayBuffer());
+    logger.info("Storage: temp file retrieved", {
+      action: "storage_temp_retrieved",
+      metadata: { uploadId, publicId: id, bytes: buffer.length },
+    });
     return { buffer, fileSize: buffer.length };
   },
 
-  async storeOriginal(documentId: string, buffer: Buffer): Promise<{ encryptedDataKey: string; encryptionIv: string }> {
+  async storeOriginal(documentId: string, buffer: Buffer): Promise<{ encryptedDataKey: string; encryptionIv: string; path: string }> {
     const kms = getKeyManagementService();
     const { plaintext: dataKey, ciphertext: encryptedDataKey } = await kms.generateDataKey();
     const encrypted = encryptToBuffer(buffer, dataKey);
@@ -54,10 +106,13 @@ export const storageService = {
     return {
       encryptedDataKey: encryptedDataKey.toString("base64"),
       encryptionIv: "",
+      path: id,
     };
   },
 
   async storePublicPdf(documentId: string, buffer: Buffer): Promise<string> {
+    // Stored as an extension-less raw object: Cloudinary blocks delivery of
+    // .pdf URLs by default, so downloads are proxied through our API instead.
     const id = publicId(siteConfig.storage.documentsPrefix, documentId, "public");
     const b64 = buffer.toString("base64");
     await cloudinary.uploader.upload(`data:application/pdf;base64,${b64}`, {
@@ -78,13 +133,25 @@ export const storageService = {
   },
 
   async storeCertificate(certificateId: string, buffer: Buffer): Promise<string> {
-    const id = publicId(siteConfig.storage.certificatesPrefix, certificateId, "certificate");
+    const id = `${siteConfig.storage.certificatesPrefix}/${certificateId}`;
     const b64 = buffer.toString("base64");
     await cloudinary.uploader.upload(`data:application/pdf;base64,${b64}`, {
       public_id: id,
       resource_type: "raw",
     });
     return id;
+  },
+
+  async getRawBuffer(path: string): Promise<Buffer> {
+    const result = await cloudinary.api.resource(path, { resource_type: "raw" }).catch(() => null);
+    if (!result) {
+      throw new AppError(ErrorCodes.NOT_FOUND, "File not found", 404);
+    }
+    const response = await fetch(result.secure_url);
+    if (!response.ok) {
+      throw new AppError(ErrorCodes.NOT_FOUND, "File not found", 404);
+    }
+    return Buffer.from(await response.arrayBuffer());
   },
 
   async getSignedDownloadUrl(path: string): Promise<string> {
@@ -128,7 +195,9 @@ export const storageService = {
   },
 
   async cleanupTemp(uploadId: string): Promise<void> {
-    tempStore.delete(uploadId);
+    await cloudinary.uploader
+      .destroy(tempId(uploadId), { resource_type: "raw" })
+      .catch(() => {});
   },
 
   async cleanupDocument(documentId: string): Promise<void> {

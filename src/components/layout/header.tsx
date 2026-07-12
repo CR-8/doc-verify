@@ -1,6 +1,8 @@
 "use client";
 
-import { Search, Menu, LogOut, User } from "lucide-react";
+import * as React from "react";
+import { useRouter } from "next/navigation";
+import { Search, Menu, LogOut, User, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Avatar } from "@/components/ui/avatar";
@@ -12,6 +14,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { useAuth } from "@/lib/auth/auth-context";
 
 interface HeaderProps {
   title: string;
@@ -19,12 +22,24 @@ interface HeaderProps {
   className?: string;
 }
 
-const mockUser = {
-  name: "John Doe",
-  email: "john@docverify.com",
-};
-
 export function Header({ title, onMenuToggle, className }: HeaderProps) {
+  const { user, loading, logout } = useAuth();
+  const router = useRouter();
+  const [loggingOut, setLoggingOut] = React.useState(false);
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    try {
+      await logout();
+      router.push("/login");
+    } finally {
+      setLoggingOut(false);
+    }
+  }
+
+  const displayName = user?.displayName ?? "User";
+  const email = user?.email ?? "";
+
   return (
     <header
       className={cn(
@@ -55,38 +70,50 @@ export function Header({ title, onMenuToggle, className }: HeaderProps) {
       </div>
 
       <div className="flex items-center gap-2">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="rounded-full">
-              <Avatar
-                src=""
-                alt={mockUser.name}
-                fallback={mockUser.name}
-                className="size-8"
-              />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>
-              <div className="flex flex-col gap-1">
-                <p className="text-sm font-medium">{mockUser.name}</p>
-                <p className="text-xs font-normal text-muted-foreground">
-                  {mockUser.email}
-                </p>
-              </div>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem>
-              <User className="size-4" />
-              Profile
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive focus:text-destructive">
-              <LogOut className="size-4" />
-              Log out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {loading ? (
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        ) : (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="rounded-full">
+                <Avatar
+                  src={user?.photoURL ?? ""}
+                  alt={displayName}
+                  fallback={displayName}
+                  className="size-8"
+                />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>
+                <div className="flex flex-col gap-1">
+                  <p className="text-sm font-medium">{displayName}</p>
+                  <p className="text-xs font-normal text-muted-foreground">
+                    {email}
+                  </p>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem>
+                <User className="size-4" />
+                Profile
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onClick={handleLogout}
+                disabled={loggingOut}
+              >
+                {loggingOut ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <LogOut className="size-4" />
+                )}
+                Log out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
     </header>
   );

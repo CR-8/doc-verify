@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Shield, FileCheck, QrCode, ScrollText, ArrowRight } from "lucide-react";
+import { Shield, FileCheck, QrCode, ScrollText, ArrowRight, LogIn, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -49,14 +49,23 @@ export default function LandingPage() {
     <div className="flex flex-col">
       <header className="flex items-center justify-between border-b px-6 py-4 lg:px-10">
         <span className="text-xl font-bold tracking-tight">DocVerify</span>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 sm:gap-4">
           <Link href="/verify">
             <Button variant="outline" size="sm">
               Verify a Document
             </Button>
           </Link>
-          <Link href="/dashboard">
-            <Button size="sm">Dashboard</Button>
+          <Link href="/login">
+            <Button variant="ghost" size="sm">
+              <LogIn className="mr-1.5 h-4 w-4" />
+              Sign in
+            </Button>
+          </Link>
+          <Link href="/signup">
+            <Button size="sm">
+              <UserPlus className="mr-1.5 h-4 w-4" />
+              Sign up
+            </Button>
           </Link>
         </div>
       </header>
@@ -70,7 +79,7 @@ export default function LandingPage() {
           QR-based verification, and complete audit trails.
         </p>
         <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
-          <Link href="/dashboard">
+          <Link href="/signup">
             <Button size="lg" className="gap-2">
               Get Started <ArrowRight className="h-4 w-4" />
             </Button>
@@ -133,7 +142,7 @@ export default function LandingPage() {
         <p className="mt-2 text-muted-foreground">
           Upload your first document and experience secure digital approvals.
         </p>
-        <Link href="/dashboard">
+        <Link href="/signup">
           <Button size="lg" className="mt-8 gap-2">
             Go to Dashboard <ArrowRight className="h-4 w-4" />
           </Button>

@@ -18,7 +18,11 @@ export async function GET(request: NextRequest) {
     const cursor = url.searchParams.get("cursor") || undefined;
     const limit = Number(url.searchParams.get("limit")) || 20;
     const result = await userRepository.list({ role, cursor, limit });
-    return successResponse(result);
+    return successResponse({
+      users: result.items,
+      total: result.total,
+      nextCursor: result.nextCursor,
+    });
   } catch (error) {
     return handleRouteError(error, correlationId);
   }

@@ -2,6 +2,8 @@
 
 import * as React from "react";
 import { UserPlus, Mail, Ban, Loader2 } from "lucide-react";
+import { apiClient } from "@/lib/api-client";
+import { toast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -47,9 +49,8 @@ export default function UsersPage() {
   React.useEffect(() => {
     async function load() {
       try {
-        const res = await fetch("/api/users");
-        const json = await res.json();
-        const list = Array.isArray(json.users) ? json.users : Array.isArray(json) ? json : [];
+        const { data } = await apiClient.get<any>("/api/users");
+        const list = Array.isArray(data?.users) ? data.users : Array.isArray(data) ? data : [];
         setUsers(
           list.map((u: UserRecord) => ({
             id: u.id,
@@ -60,6 +61,12 @@ export default function UsersPage() {
             joinedDate: u.joinedDate ?? u.createdAt ?? "",
           }))
         );
+      } catch (err) {
+        toast({
+          title: "Failed to load users",
+          description: err instanceof Error ? err.message : undefined,
+          variant: "destructive",
+        });
       } finally {
         setLoading(false);
       }
@@ -71,17 +78,13 @@ export default function UsersPage() {
     e.preventDefault();
     setInviting(true);
     try {
-      const res = await fetch("/api/users", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: inviteName, email: inviteEmail, role: inviteRole }),
+      const { data: userData } = await apiClient.post<any>("/api/users", {
+        name: inviteName, email: inviteEmail, role: inviteRole,
       });
-      if (!res.ok) throw new Error("Failed to create user");
-      const json = await res.json();
       setUsers((prev) => [
         ...prev,
         {
-          id: json.user?.id ?? json.id ?? String(Date.now()),
+          id: userData?.user?.id ?? userData?.id ?? String(Date.now()),
           name: inviteName,
           email: inviteEmail,
           role: inviteRole,
@@ -103,7 +106,7 @@ export default function UsersPage() {
   async function handleDeactivate(id: string) {
     if (!confirm("Deactivate this user?")) return;
     try {
-      await fetch(`/api/users/${id}/deactivate`, { method: "POST" });
+      await apiClient.post(`/api/users/${id}/deactivate`);
       setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, status: "inactive" } : u)));
     } catch {
       alert("Failed to deactivate user");

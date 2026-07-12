@@ -6,6 +6,28 @@ import type { Approval, ApprovalStatus } from "@/types/approval";
 
 const COLLECTION = "approvals";
 
+// Returns the signed time in millis, or null for approvals that are not yet
+// signed (the `signedAt` field is absent until an approval is completed).
+function signedMillis(approval: Approval): number | null {
+  const value = (approval as { signedAt?: { toMillis?: () => number } }).signedAt;
+  return value && typeof value.toMillis === "function" ? value.toMillis() : null;
+}
+
+// In-memory ordering by signedAt, keeping not-yet-signed approvals in the
+// result (Firestore's orderBy would drop documents missing the field) and
+// placing them last. Sorting client-side also avoids requiring a composite
+// index for the documentId + signedAt queries.
+function sortBySignedAt(approvals: Approval[], direction: "asc" | "desc"): Approval[] {
+  return [...approvals].sort((a, b) => {
+    const am = signedMillis(a);
+    const bm = signedMillis(b);
+    if (am === null && bm === null) return 0;
+    if (am === null) return 1;
+    if (bm === null) return -1;
+    return direction === "asc" ? am - bm : bm - am;
+  });
+}
+
 export const approvalRepository = {
   async create(approval: Omit<Approval, "id">): Promise<Approval> {
     const ref = adminDb.collection(COLLECTION).doc();
@@ -25,9 +47,8 @@ export const approvalRepository = {
       .collection(COLLECTION)
       .withConverter(approvalConverter)
       .where("documentId", "==", documentId)
-      .orderBy("signedAt", "asc")
       .get();
-    return snapshot.docs.map((d) => d.data());
+    return sortBySignedAt(snapshot.docs.map((d) => d.data()), "asc");
   },
 
   async getByToken(verificationToken: string): Promise<Approval | null> {
@@ -52,9 +73,8 @@ export const approvalRepository = {
     const snapshot = await adminDb
       .collection(COLLECTION)
       .withConverter(approvalConverter)
-      .orderBy("signedAt", "desc")
       .get();
-    return snapshot.docs.map((d) => d.data());
+    return sortBySignedAt(snapshot.docs.map((d) => d.data()), "desc");
   },
 
   async listByDocument(documentId: string): Promise<Approval[]> {
@@ -62,8 +82,7 @@ export const approvalRepository = {
       .collection(COLLECTION)
       .withConverter(approvalConverter)
       .where("documentId", "==", documentId)
-      .orderBy("signedAt", "desc")
       .get();
-    return snapshot.docs.map((d) => d.data());
+    return sortBySignedAt(snapshot.docs.map((d) => d.data()), "desc");
   },
 };

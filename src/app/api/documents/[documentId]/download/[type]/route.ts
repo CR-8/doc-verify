@@ -1,10 +1,15 @@
-import { NextRequest } from "next/server";
-import { successResponse, handleRouteError } from "@/lib/api-utils";
+import { NextRequest, NextResponse } from "next/server";
+import { handleRouteError } from "@/lib/api-utils";
 import { authenticateRequest } from "@/lib/middleware/auth-guard";
 import { requireRole } from "@/lib/middleware/role-guard";
 import { checkRateLimit } from "@/lib/middleware/rate-limiter";
 import { storageService } from "@/lib/storage/storage-service";
 import { documentRepository } from "@/lib/db/repositories/document-repository";
+
+function safeFileName(title: string, suffix: string): string {
+  const base = (title || "document").replace(/[^a-zA-Z0-9-_ ]+/g, "").trim().replace(/\s+/g, "_") || "document";
+  return `${base}-${suffix}.pdf`;
+}
 
 export async function GET(
   request: NextRequest,
@@ -39,20 +44,24 @@ export async function GET(
       );
     }
 
-    let url: string;
+    let buffer: Buffer;
     if (type === "original") {
       await requireRole(user.uid, "admin");
-      url = await storageService.getSignedDownloadUrl(doc.storagePaths.original);
-    } else if (type === "public" || type === "internal") {
-      url = await storageService.getSignedDownloadUrl(doc.storagePaths[type]);
+      buffer = await storageService.getOriginalBuffer(documentId, doc.encryptedDataKey);
     } else {
-      return handleRouteError(
-        Object.assign(new Error("Invalid download type"), { code: "VALIDATION_ERROR", statusCode: 400 }),
-        correlationId
-      );
+      buffer = await storageService.getDocumentBuffer(documentId, type as "public" | "internal");
     }
 
-    return successResponse({ url, expiresIn: 900 });
+    const fileName = safeFileName(doc.title, type);
+    return new NextResponse(new Uint8Array(buffer), {
+      status: 200,
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `attachment; filename="${fileName}"`,
+        "Content-Length": String(buffer.length),
+        "Cache-Control": "private, no-store",
+      },
+    });
   } catch (error) {
     return handleRouteError(error, correlationId);
   }

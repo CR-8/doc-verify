@@ -25,8 +25,14 @@ interface DocumentData {
 
 interface VerifyResponse {
   valid: boolean;
-  document: DocumentData;
-  signature?: SignatureData;
+  document: DocumentData | null;
+  signature?: SignatureData | null;
+}
+
+interface ApiEnvelope {
+  success: boolean;
+  data?: VerifyResponse;
+  error?: { message?: string };
 }
 
 export default function VerifyResultPage() {
@@ -38,12 +44,12 @@ export default function VerifyResultPage() {
 
   useEffect(() => {
     fetch(`/api/verify/${encodeURIComponent(documentId)}`)
-      .then((r) => {
-        if (!r.ok) throw new Error(`Verification failed (${r.status})`);
-        return r.json();
-      })
-      .then((d: VerifyResponse) => {
-        setData(d);
+      .then((r) => r.json())
+      .then((envelope: ApiEnvelope) => {
+        if (!envelope.success || !envelope.data) {
+          throw new Error(envelope.error?.message ?? "Verification failed");
+        }
+        setData(envelope.data);
         setLoading(false);
       })
       .catch((e) => {

@@ -2,6 +2,8 @@ import { NextRequest } from "next/server";
 import { successResponse, handleRouteError } from "@/lib/api-utils";
 import { checkRateLimit } from "@/lib/middleware/rate-limiter";
 import { documentRepository } from "@/lib/db/repositories/document-repository";
+import { approvalRepository } from "@/lib/db/repositories/approval-repository";
+import { userRepository } from "@/lib/db/repositories/user-repository";
 
 export async function GET(
   _request: NextRequest,
@@ -14,19 +16,34 @@ export async function GET(
 
     const doc = await documentRepository.getById(documentId);
     if (!doc) {
-      return handleRouteError(
-        Object.assign(new Error("Document not found"), { code: "NOT_FOUND", statusCode: 404 }),
-        correlationId
-      );
+      // Return a verification result (not an HTTP error) so the page can render
+      // its "not found" state rather than a generic error.
+      return successResponse({ valid: false, document: null, signature: null });
+    }
+
+    const approvals = await approvalRepository.getByDocumentId(documentId);
+    const signed = approvals.filter((a) => a.status === "signed");
+    const latest = signed[signed.length - 1];
+
+    let signature = null;
+    if (latest) {
+      const signer = await userRepository.getById(latest.userId);
+      signature = {
+        signerName: signer?.displayName || "Unknown Signer",
+        signedAt: latest.signedAt?.toDate?.()?.toISOString() || "",
+        verificationToken: latest.verificationToken,
+      };
     }
 
     return successResponse({
-      valid: true,
-      status: doc.status,
-      sha256Hash: doc.sha256Hash,
-      metadata: doc.metadata,
-      pageCount: doc.pageCount,
-      expiresAt: doc.expiresAt?.toDate?.()?.toISOString() || null,
+      valid: doc.status === "approved",
+      document: {
+        title: doc.title,
+        sha256Hash: doc.sha256Hash,
+        status: doc.status,
+        uploadedAt: doc.uploadedAt?.toDate?.()?.toISOString() || null,
+      },
+      signature,
     });
   } catch (error) {
     return handleRouteError(error, correlationId);

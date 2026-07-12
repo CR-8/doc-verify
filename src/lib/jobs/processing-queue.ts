@@ -30,6 +30,18 @@ export async function enqueueJob(params: {
     updatedAt: null as unknown as FirebaseFirestore.Timestamp,
     completedAt: null,
   } as any);
+
+  // There is no separate background worker in this deployment, so run the job
+  // inline. processJob records success/failure on the job record itself and
+  // does not rethrow, so enqueue callers (upload/approve) still succeed even if
+  // PDF generation fails — the failure is visible via the job status.
+  await processJob(job.id).catch((error) => {
+    logger.error("Inline job processing error", {
+      action: "job_inline_error",
+      metadata: { jobId: job.id, documentId: params.documentId, jobType: params.jobType, error: String(error) },
+    });
+  });
+
   return job.id;
 }
 
@@ -74,7 +86,7 @@ async function handlePublicPdfGeneration(documentId: string, _jobId: string): Pr
   const publicPdf = await generatePublicPdf(buffer, documentId);
   const publicId = await storageService.storePublicPdf(documentId, publicPdf);
   await documentRepository.update(documentId, {
-    storagePaths: { original: "", public: publicId, internal: "" },
+    storagePaths: { ...doc.storagePaths, public: publicId },
   });
 }
 
@@ -99,7 +111,7 @@ async function handleInternalPdfGeneration(documentId: string, _jobId: string): 
   const internalPdf = await generateInternalPdf(buffer, documentId, signatures);
   const internalId = await storageService.storeInternalPdf(documentId, internalPdf);
   await documentRepository.update(documentId, {
-    storagePaths: { original: "", public: "", internal: internalId },
+    storagePaths: { ...doc.storagePaths, internal: internalId },
   });
 }
 

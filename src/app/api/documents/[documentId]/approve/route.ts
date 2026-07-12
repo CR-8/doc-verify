@@ -13,6 +13,7 @@ import { createAuditLog } from "@/lib/audit/audit-logger";
 import { generateToken, generateId } from "@/lib/utils";
 import { hashPayload } from "@/lib/crypto/hash";
 import { getAuthProvider } from "@/lib/auth/firebase-provider";
+import { Timestamp as AdminTimestamp } from "firebase-admin/firestore";
 
 export async function POST(
   request: NextRequest,
@@ -60,7 +61,8 @@ export async function POST(
 
     const signatureId = generateId();
     const verificationToken = generateToken();
-    const signedAt = new Date().toISOString();
+    const signedAtTs = AdminTimestamp.now();
+    const signedAt = signedAtTs.toDate().toISOString();
     const signatureHash = hashPayload({
       documentHash: doc.sha256Hash,
       userId: user.uid,
@@ -73,7 +75,7 @@ export async function POST(
       userId: user.uid,
       signatureId,
       status: "signed",
-      signedAt: null as any,
+      signedAt: signedAtTs as any,
       ipAddress: request.headers.get("x-forwarded-for") || "unknown",
       userAgent: request.headers.get("user-agent") || "unknown",
       certificateId: "",
@@ -97,7 +99,7 @@ export async function POST(
       signerDesignation: "",
       documentTitle: doc.title,
       documentHash: doc.sha256Hash,
-      signedAt: null as any,
+      signedAt: signedAtTs as any,
       verificationToken,
       certificateHash: "",
       expiresAt: doc.expiresAt,

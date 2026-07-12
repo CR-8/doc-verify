@@ -24,13 +24,23 @@ export const certificateRepository = {
   },
 
   async getByDocumentId(documentId: string): Promise<Certificate[]> {
+    // Filter by documentId only (no composite index needed) and sort in memory
+    // so certificates without a signedAt value are not silently dropped.
     const snapshot = await adminDb
       .collection(COLLECTION)
       .withConverter(certificateConverter)
       .where("documentId", "==", documentId)
-      .orderBy("signedAt", "desc")
       .get();
-    return snapshot.docs.map((d) => d.data());
+    return snapshot.docs.map((d) => d.data()).sort((a, b) => {
+      const am = (a as { signedAt?: { toMillis?: () => number } }).signedAt;
+      const bm = (b as { signedAt?: { toMillis?: () => number } }).signedAt;
+      const av = am && typeof am.toMillis === "function" ? am.toMillis() : null;
+      const bv = bm && typeof bm.toMillis === "function" ? bm.toMillis() : null;
+      if (av === null && bv === null) return 0;
+      if (av === null) return 1;
+      if (bv === null) return -1;
+      return bv - av;
+    });
   },
 
   async getByToken(verificationToken: string): Promise<Certificate | null> {

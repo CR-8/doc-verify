@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
       approvals = await approvalRepository.listAll();
     }
 
-    return successResponse({ items: approvals, total: approvals.length });
+    return successResponse({ approvals, total: approvals.length });
   } catch (error) {
     return handleRouteError(error, correlationId);
   }

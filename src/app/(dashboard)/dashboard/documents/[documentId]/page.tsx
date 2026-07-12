@@ -3,6 +3,8 @@
 import * as React from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { apiClient } from "@/lib/api-client";
+import { toast } from "@/hooks/use-toast";
 import {
   ArrowLeft,
   Download,
@@ -61,13 +63,29 @@ export default function DocumentDetailPage() {
   const [doc, setDoc] = React.useState<DocumentData | null>(null);
   const [loading, setLoading] = React.useState(true);
 
+  async function handleDownload(url: string) {
+    try {
+      await apiClient.download(url);
+    } catch (err) {
+      toast({
+        title: "Failed to download file",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
+    }
+  }
+
   React.useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(`/api/documents/${params.documentId}`);
-        if (!res.ok) { setDoc(null); return; }
-        const json = await res.json();
-        setDoc(json.document ?? json);
+        const { data } = await apiClient.get<any>(`/api/documents/${params.documentId}`);
+        setDoc(data?.document ?? data ?? null);
+      } catch (err) {
+        toast({
+          title: "Failed to load document",
+          description: err instanceof Error ? err.message : undefined,
+          variant: "destructive",
+        });
       } finally {
         setLoading(false);
       }
@@ -213,11 +231,11 @@ export default function DocumentDetailPage() {
               <CardTitle className="text-lg">Actions</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Button className="w-full" variant="outline" onClick={() => window.open(`/api/documents/${doc.id}/download/public`, "_blank")}>
+              <Button className="w-full" variant="outline" onClick={() => handleDownload(`/api/documents/${doc.id}/download/public`)}>
                 <Download className="mr-2 h-4 w-4" />
                 Download Public PDF
               </Button>
-              <Button className="w-full" variant="outline" onClick={() => window.open(`/api/documents/${doc.id}/download/internal`, "_blank")}>
+              <Button className="w-full" variant="outline" onClick={() => handleDownload(`/api/documents/${doc.id}/download/internal`)}>
                 <Download className="mr-2 h-4 w-4" />
                 Download Internal PDF
               </Button>
@@ -245,7 +263,7 @@ export default function DocumentDetailPage() {
                     <p className="text-xs text-muted-foreground">{doc.certificateId}</p>
                   </div>
                 </div>
-                <Button className="w-full" variant="outline" onClick={() => window.open(`/api/certificates/${doc.certificateId}/download`, "_blank")}>
+                <Button className="w-full" variant="outline" onClick={() => handleDownload(`/api/certificates/${doc.certificateId}/download`)}>
                   <Download className="mr-2 h-4 w-4" />
                   Download Certificate
                 </Button>

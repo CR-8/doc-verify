@@ -3,6 +3,8 @@
 import * as React from "react";
 import { Eye, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import Link from "next/link";
+import { apiClient } from "@/lib/api-client";
+import { toast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
@@ -38,9 +40,8 @@ export default function ApprovalsPage() {
   React.useEffect(() => {
     async function load() {
       try {
-        const res = await fetch("/api/approvals");
-        const json = await res.json();
-        const list = Array.isArray(json.approvals) ? json.approvals : Array.isArray(json) ? json : [];
+        const { data } = await apiClient.get<any>("/api/approvals");
+        const list = Array.isArray(data?.approvals) ? data.approvals : Array.isArray(data) ? data : [];
         setApprovals(
           list.map((a: ApprovalRecord) => ({
             id: a.id,
@@ -51,6 +52,12 @@ export default function ApprovalsPage() {
             date: a.date ?? a.createdAt ?? "",
           }))
         );
+      } catch (err) {
+        toast({
+          title: "Failed to load approvals",
+          description: err instanceof Error ? err.message : undefined,
+          variant: "destructive",
+        });
       } finally {
         setLoading(false);
       }
@@ -62,7 +69,7 @@ export default function ApprovalsPage() {
     if (!confirm("Reject this approval?")) return;
     setRejecting(id);
     try {
-      await fetch(`/api/approvals/${id}/reject`, { method: "POST" });
+      await apiClient.post(`/api/approvals/${id}/reject`);
       setApprovals((prev) => prev.map((a) => (a.id === id ? { ...a, status: "rejected" } : a)));
     } catch {
       alert("Failed to reject approval");

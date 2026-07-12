@@ -31,12 +31,12 @@ export default function CertificatePage() {
 
   useEffect(() => {
     fetch(`/api/certificates/${encodeURIComponent(certificateId)}`)
-      .then((r) => {
-        if (!r.ok) throw new Error("Failed to load certificate");
-        return r.json();
-      })
-      .then((d: CertificateData) => {
-        setCert(d);
+      .then((r) => r.json())
+      .then((envelope: { success: boolean; data?: CertificateData; error?: { message?: string } }) => {
+        if (!envelope.success || !envelope.data) {
+          throw new Error(envelope.error?.message ?? "Failed to load certificate");
+        }
+        setCert(envelope.data);
         setLoading(false);
       })
       .catch((e) => {
@@ -49,10 +49,18 @@ export default function CertificatePage() {
     try {
       const res = await fetch(`/api/certificates/${encodeURIComponent(certificateId)}/download`);
       if (!res.ok) throw new Error("Download failed");
-      const data = await res.json();
-      if (data.url) {
-        window.open(data.url, "_blank");
-      }
+      const disposition = res.headers.get("Content-Disposition") ?? "";
+      const match = disposition.match(/filename="?([^"]+)"?/i);
+      const fileName = match?.[1] ?? "certificate.pdf";
+      const blob = await res.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = fileName;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(objectUrl);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Download failed");
     }

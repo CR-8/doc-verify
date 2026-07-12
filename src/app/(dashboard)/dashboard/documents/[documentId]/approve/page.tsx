@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, CheckCircle2, FileText, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { apiClient } from "@/lib/api-client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,10 +38,9 @@ export default function ApproveDocumentPage() {
   React.useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(`/api/documents/${params.documentId}`);
-        if (!res.ok) { setDoc(null); return; }
-        const json = await res.json();
-        const d = json.document ?? json;
+        const res = await apiClient.get<{ document: DocumentSummary }>(`/api/documents/${params.documentId}`);
+        const d: DocumentSummary | undefined = res.data?.document ?? (res.data as DocumentSummary | undefined);
+        if (!d) { setDoc(null); return; }
         setDoc({
           id: d.id,
           title: d.title,
@@ -49,6 +49,8 @@ export default function ApproveDocumentPage() {
           uploadedBy: d.uploadedBy,
           pageCount: d.pageCount ?? 1,
         });
+      } catch {
+        setDoc(null);
       } finally {
         setLoading(false);
       }
@@ -82,15 +84,10 @@ export default function ApproveDocumentPage() {
     e.preventDefault();
     setSubmitting(true);
     try {
-      const res = await fetch(`/api/documents/${docId}/approve`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          signaturePage: pageOption === "manual" ? Number(pageNumber) : undefined,
-          pageSelectorType: pageOption === "auto_append" ? "auto_append" : "manual_page",
-        }),
+      await apiClient.post(`/api/documents/${docId}/approve`, {
+        signaturePage: pageOption === "manual" ? Number(pageNumber) : undefined,
+        pageSelectorType: pageOption === "auto_append" ? "auto_append" : "manual_page",
       });
-      if (!res.ok) throw new Error("Approval failed");
       router.push(`/dashboard/documents/${docId}`);
     } catch {
       alert("Failed to approve document");

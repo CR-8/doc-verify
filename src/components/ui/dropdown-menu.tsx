@@ -36,19 +36,28 @@ function DropdownMenuTrigger({
   children,
   className,
   onClick,
+  asChild,
   ...props
 }: DropdownMenuTriggerProps) {
   const { open, setOpen } = useDropdownMenuContext();
 
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    onClick?.(e);
+    setOpen(!open);
+  };
+
+  if (asChild && React.isValidElement<{ onClick?: React.MouseEventHandler; className?: string }>(children)) {
+    return React.cloneElement(children, {
+      onClick: (e: React.MouseEvent) => {
+        children.props.onClick?.(e);
+        handleClick(e as React.MouseEvent<HTMLButtonElement>);
+      },
+      className: cn(children.props.className, className),
+    });
+  }
+
   return (
-    <button
-      className={cn(className)}
-      onClick={(e) => {
-        onClick?.(e);
-        setOpen(!open);
-      }}
-      {...props}
-    >
+    <button className={cn(className)} onClick={handleClick} {...props}>
       {children}
     </button>
   );

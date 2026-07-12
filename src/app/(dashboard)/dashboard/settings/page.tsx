@@ -2,6 +2,8 @@
 
 import * as React from "react";
 import { Save, Copy, RefreshCw, Eye, EyeOff, Loader2, Check } from "lucide-react";
+import { apiClient } from "@/lib/api-client";
+import { toast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -54,9 +56,8 @@ export default function SettingsPage() {
   React.useEffect(() => {
     async function load() {
       try {
-        const res = await fetch("/api/settings");
-        const json = await res.json();
-        const s = json.settings ?? json;
+        const { data } = await apiClient.get<any>("/api/settings");
+        const s = data?.settings ?? data;
         setSettings(s);
         setCompanyName(s.companyName ?? "");
         setDefaultLanguage(s.defaultLanguage ?? "en");
@@ -71,6 +72,12 @@ export default function SettingsPage() {
           documentRejected: s.notifications?.documentRejected ?? false,
           certificateGenerated: s.notifications?.certificateGenerated ?? false,
         });
+      } catch (err) {
+        toast({
+          title: "Failed to load settings",
+          description: err instanceof Error ? err.message : undefined,
+          variant: "destructive",
+        });
       } finally {
         setLoading(false);
       }
@@ -82,22 +89,16 @@ export default function SettingsPage() {
     e.preventDefault();
     setSaving(true);
     try {
-      const res = await fetch("/api/settings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          companyName,
-          defaultLanguage,
-          timezone,
-          mfaEnabled,
-          sessionTimeout,
-          passwordPolicy,
-          notifications,
-        }),
+      const { data: saveData } = await apiClient.post<any>("/api/settings", {
+        companyName,
+        defaultLanguage,
+        timezone,
+        mfaEnabled,
+        sessionTimeout,
+        passwordPolicy,
+        notifications,
       });
-      if (!res.ok) throw new Error("Failed to save settings");
-      const json = await res.json();
-      setSettings(json.settings ?? json);
+      setSettings(saveData?.settings ?? saveData);
     } catch {
       alert("Failed to save settings");
     } finally {
@@ -108,13 +109,10 @@ export default function SettingsPage() {
   async function handleRegenerateApiKey() {
     if (!confirm("Regenerate API key? This will invalidate the current key.")) return;
     try {
-      const res = await fetch("/api/settings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ regenerateApiKey: true }),
+      const { data: apiData } = await apiClient.post<any>("/api/settings", {
+        regenerateApiKey: true,
       });
-      const json = await res.json();
-      setSettings((prev) => prev ? { ...prev, apiKey: json.settings?.apiKey ?? json.apiKey } : prev);
+      setSettings((prev) => prev ? { ...prev, apiKey: apiData?.settings?.apiKey ?? apiData?.apiKey } : prev);
     } catch {
       alert("Failed to regenerate API key");
     }

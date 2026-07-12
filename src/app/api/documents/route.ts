@@ -24,7 +24,22 @@ export async function GET(request: NextRequest) {
       sortOrder: query.sortOrder,
     });
 
-    return successResponse(result);
+    const documents = result.items.map((doc) => {
+      const uploadedAt = doc.uploadedAt?.toDate ? doc.uploadedAt.toDate().toISOString() : null;
+      return {
+        ...doc,
+        uploadedAt,
+        // The client table reads `createdAt`; expose the upload time under that name.
+        createdAt: uploadedAt,
+        updatedAt: doc.updatedAt?.toDate ? doc.updatedAt.toDate().toISOString() : null,
+      };
+    });
+
+    return successResponse({
+      documents,
+      total: result.total,
+      nextCursor: result.nextCursor,
+    });
   } catch (error) {
     return handleRouteError(error, correlationId);
   }

@@ -2,6 +2,8 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
+import { apiClient } from "@/lib/api-client";
+import { toast } from "@/hooks/use-toast";
 import { Eye, Download, Trash2, Upload, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,9 +60,8 @@ export default function DocumentsPage() {
   async function loadDocuments() {
     setLoading(true);
     try {
-      const res = await fetch("/api/documents");
-      const json = await res.json();
-      const list = Array.isArray(json.documents) ? json.documents : [];
+      const { data } = await apiClient.get<{ documents: DocumentRecord[] }>("/api/documents");
+      const list = Array.isArray(data?.documents) ? data.documents : [];
       setDocuments(
         list.map((d: DocumentRecord) => ({
           id: d.id,
@@ -70,6 +71,12 @@ export default function DocumentsPage() {
           createdAt: d.createdAt ?? d.date ?? "",
         }))
       );
+    } catch (err) {
+      toast({
+        title: "Failed to load documents",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -93,9 +100,8 @@ export default function DocumentsPage() {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const res = await fetch("/api/documents/upload", { method: "POST", body: formData });
-      const json = await res.json();
-      setUploadId(json.uploadId);
+      const { data: uploadData } = await apiClient.postFormData<{ uploadId: string }>("/api/documents/upload", formData);
+      setUploadId(uploadData?.uploadId ?? null);
       setUploadStep("details");
     } catch {
       alert("Failed to upload file");
@@ -109,18 +115,13 @@ export default function DocumentsPage() {
     if (!uploadId) return;
     setUploading(true);
     try {
-      const res = await fetch("/api/documents/complete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          uploadId,
-          title,
-          description,
-          requiredApprovals: Number(requiredApprovals),
-          classification,
-        }),
+      await apiClient.post("/api/documents/complete", {
+        uploadId,
+        title,
+        description,
+        requiredApprovals: Number(requiredApprovals),
+        classification,
       });
-      if (!res.ok) throw new Error("Failed to complete upload");
       setUploadOpen(false);
       setUploadStep("select");
       setSelectedFile(null);
@@ -148,10 +149,22 @@ export default function DocumentsPage() {
     setClassification("internal");
   }
 
+  async function handleDownload(url: string) {
+    try {
+      await apiClient.download(url);
+    } catch (err) {
+      toast({
+        title: "Failed to download file",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
+    }
+  }
+
   async function handleDelete(id: string) {
     if (!confirm("Delete this document?")) return;
     try {
-      await fetch(`/api/documents/${id}`, { method: "DELETE" });
+      await apiClient.delete(`/api/documents/${id}`);
       loadDocuments();
     } catch {
       alert("Failed to delete document");
@@ -180,7 +193,7 @@ export default function DocumentsPage() {
           <Button variant="ghost" size="icon" title="View" onClick={() => router.push(`/dashboard/documents/${item.id}`)}>
             <Eye className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" title="Download" onClick={() => window.open(`/api/documents/${item.id}/download/public`, "_blank")}>
+          <Button variant="ghost" size="icon" title="Download" onClick={() => handleDownload(`/api/documents/${item.id}/download/public`)}>
             <Download className="h-4 w-4" />
           </Button>
           <Button variant="ghost" size="icon" title="Delete" onClick={() => handleDelete(item.id)}>

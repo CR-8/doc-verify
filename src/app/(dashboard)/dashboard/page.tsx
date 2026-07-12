@@ -2,6 +2,8 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { apiClient } from "@/lib/api-client";
+import { toast } from "@/hooks/use-toast";
 import {
   FileText,
   Clock,
@@ -46,18 +48,29 @@ export default function DashboardPage() {
   React.useEffect(() => {
     async function load() {
       try {
-        const [docRes, apprRes, usersRes] = await Promise.all([
-          fetch("/api/documents"),
-          fetch("/api/approvals"),
-          fetch("/api/users"),
+        // /api/users is admin-only; a failure there (or anywhere) should not
+        // blank the whole dashboard, so each request settles independently.
+        const [docsRes, apprRes, usersRes] = await Promise.allSettled([
+          apiClient.get<any>("/api/documents"),
+          apiClient.get<any>("/api/approvals"),
+          apiClient.get<any>("/api/users"),
         ]);
-        const docs = await docRes.json();
-        const approvals = await apprRes.json();
-        const users = await usersRes.json();
 
-        const docList = Array.isArray(docs.documents) ? docs.documents : [];
-        const apprList = Array.isArray(approvals.approvals ?? approvals) ? (approvals.approvals ?? approvals) : [];
-        const usersList = Array.isArray(users.users ?? users) ? (users.users ?? users) : [];
+        if (docsRes.status === "rejected" && apprRes.status === "rejected") {
+          toast({
+            title: "Failed to load dashboard",
+            description: docsRes.reason instanceof Error ? docsRes.reason.message : undefined,
+            variant: "destructive",
+          });
+        }
+
+        const docsData = docsRes.status === "fulfilled" ? docsRes.value.data : null;
+        const apprData = apprRes.status === "fulfilled" ? apprRes.value.data : null;
+        const usersData = usersRes.status === "fulfilled" ? usersRes.value.data : null;
+
+        const docList: any[] = Array.isArray(docsData?.documents) ? docsData.documents : [];
+        const apprList: any[] = Array.isArray(apprData?.approvals) ? apprData.approvals : Array.isArray(apprData) ? apprData : [];
+        const usersList: any[] = Array.isArray(usersData?.users) ? usersData.users : Array.isArray(usersData) ? usersData : [];
 
         const today = new Date().toISOString().slice(0, 10);
         const approvedToday = apprList.filter(
@@ -66,7 +79,7 @@ export default function DashboardPage() {
         ).length;
 
         setData({
-          totalDocuments: docs.total ?? docList.length,
+          totalDocuments: docsData?.total ?? docList.length,
           pendingApprovals: apprList.filter(
             (a: { status: string }) => a.status === "pending" || a.status === "pending_approval"
           ).length,
