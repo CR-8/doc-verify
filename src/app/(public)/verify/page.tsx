@@ -30,7 +30,8 @@ export default function VerifyPage() {
         body: formData,
       });
       if (!res.ok) throw new Error("Upload failed");
-      const data = await res.json();
+      const json = await res.json();
+      const data = json.data ?? json;
       router.push(`/verify/${data.id ?? data.documentId ?? data.uploadId}`);
     } catch {
       setUploading(false);
