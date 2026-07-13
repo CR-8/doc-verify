@@ -11,11 +11,15 @@ import {
 import { auth } from "@/lib/firebase/client";
 import { toast } from "@/hooks/use-toast";
 
+type UserRole = "super_admin" | "admin" | "approver" | "viewer" | "auditor";
+
 interface AuthUser {
   uid: string;
   email: string;
   displayName: string;
   photoURL?: string;
+  role: UserRole;
+  isActive: boolean;
 }
 
 interface AuthContextValue {
@@ -29,20 +33,28 @@ interface AuthContextValue {
 
 const AuthContext = React.createContext<AuthContextValue | null>(null);
 
-function mapFirebaseUser(u: User): AuthUser {
+interface ServerProfile {
+  role: UserRole;
+  isActive: boolean;
+}
+
+function mapFirebaseUser(u: User, profile: ServerProfile): AuthUser {
   return {
     uid: u.uid,
     email: u.email ?? "",
     displayName: u.displayName ?? u.email?.split("@")[0] ?? "User",
     photoURL: u.photoURL ?? undefined,
+    role: profile.role,
+    isActive: profile.isActive,
   };
 }
 
 // Ensures the server-side Firestore profile (users/{uid}) exists before any
-// authenticated API call is made; without it every route returns 403.
-const provisionPromises = new Map<string, Promise<void>>();
+// authenticated API call is made; without it every route returns 403. Returns
+// the provisioned role/isActive so the client can gate the UI by role.
+const provisionPromises = new Map<string, Promise<ServerProfile>>();
 
-function ensureProvisioned(firebaseUser: User): Promise<void> {
+function ensureProvisioned(firebaseUser: User): Promise<ServerProfile> {
   const existing = provisionPromises.get(firebaseUser.uid);
   if (existing) return existing;
 
@@ -52,10 +64,15 @@ function ensureProvisioned(firebaseUser: User): Promise<void> {
       method: "POST",
       headers: { Authorization: `Bearer ${idToken}` },
     });
+    const json = await res.json().catch(() => null);
     if (!res.ok) {
-      const json = await res.json().catch(() => null);
       throw new Error(json?.error?.message ?? "Failed to set up your account");
     }
+    const data = json?.data ?? json;
+    return {
+      role: (data?.role ?? "viewer") as UserRole,
+      isActive: data?.isActive !== false,
+    };
   })();
 
   promise.catch(() => provisionPromises.delete(firebaseUser.uid));
@@ -71,8 +88,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     const unsubscribe = onIdTokenChanged(auth, async (firebaseUser) => {
       if (firebaseUser) {
+        let profile: ServerProfile = { role: "viewer", isActive: true };
         try {
-          await ensureProvisioned(firebaseUser);
+          profile = await ensureProvisioned(firebaseUser);
         } catch {
           toast({
             title: "Account setup incomplete",
@@ -80,7 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             variant: "destructive",
           });
         }
-        setUser(mapFirebaseUser(firebaseUser));
+        setUser(mapFirebaseUser(firebaseUser, profile));
         setToken(await firebaseUser.getIdToken());
       } else {
         setUser(null);
@@ -105,15 +123,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = React.useCallback(async (email: string, password: string) => {
     const cred = await signInWithEmailAndPassword(auth, email, password);
-    await ensureProvisioned(cred.user);
-    setUser(mapFirebaseUser(cred.user));
+    const profile = await ensureProvisioned(cred.user);
+    setUser(mapFirebaseUser(cred.user, profile));
     setToken(await cred.user.getIdToken());
   }, []);
 
   const signup = React.useCallback(async (email: string, password: string) => {
     const cred = await createUserWithEmailAndPassword(auth, email, password);
-    await ensureProvisioned(cred.user);
-    setUser(mapFirebaseUser(cred.user));
+    const profile = await ensureProvisioned(cred.user);
+    setUser(mapFirebaseUser(cred.user, profile));
     setToken(await cred.user.getIdToken());
   }, []);
 

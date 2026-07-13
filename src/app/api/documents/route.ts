@@ -5,6 +5,7 @@ import { requireRole } from "@/lib/middleware/role-guard";
 import { checkRateLimit } from "@/lib/middleware/rate-limiter";
 import { documentRepository } from "@/lib/db/repositories/document-repository";
 import { DocumentQuerySchema } from "@/lib/validators/document-schemas";
+import { resolveUserNames } from "@/lib/db/enrich";
 
 export async function GET(request: NextRequest) {
   const correlationId = crypto.randomUUID();
@@ -24,6 +25,8 @@ export async function GET(request: NextRequest) {
       sortOrder: query.sortOrder,
     });
 
+    const names = await resolveUserNames(result.items.map((doc) => doc.uploadedBy));
+
     const documents = result.items.map((doc) => {
       const uploadedAt = doc.uploadedAt?.toDate ? doc.uploadedAt.toDate().toISOString() : null;
       return {
@@ -32,6 +35,8 @@ export async function GET(request: NextRequest) {
         // The client table reads `createdAt`; expose the upload time under that name.
         createdAt: uploadedAt,
         updatedAt: doc.updatedAt?.toDate ? doc.updatedAt.toDate().toISOString() : null,
+        // Resolve the uploader UID to a display name for the table.
+        uploadedByName: names.get(doc.uploadedBy) ?? "Unknown",
       };
     });
 

@@ -67,7 +67,7 @@ export default function DocumentsPage() {
           id: d.id,
           title: d.title,
           status: d.status,
-          uploadedBy: d.uploadedBy ?? "-",
+          uploadedBy: (d.uploadedByName as string) ?? d.uploadedBy ?? "-",
           createdAt: d.createdAt ?? d.date ?? "",
         }))
       );

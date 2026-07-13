@@ -5,6 +5,7 @@ import { checkRateLimit } from "@/lib/middleware/rate-limiter";
 import { documentRepository } from "@/lib/db/repositories/document-repository";
 import { approvalRepository } from "@/lib/db/repositories/approval-repository";
 import { certificateRepository } from "@/lib/db/repositories/certificate-repository";
+import { resolveUserNames, toIso } from "@/lib/db/enrich";
 
 export async function GET(
   _request: NextRequest,
@@ -40,9 +41,38 @@ export async function GET(
     const approvals = await approvalRepository.getByDocumentId(documentId);
     const certificates = await certificateRepository.getByDocumentId(documentId);
 
+    // Resolve the uploader and every approver's display name in one batch so the
+    // UI never has to show a raw Firebase UID.
+    const names = await resolveUserNames([doc.uploadedBy, ...approvals.map((a) => a.userId)]);
+
+    const enrichedApprovals = approvals.map((a) => ({
+      id: a.id,
+      approver: names.get(a.userId) ?? "Unknown",
+      status: a.status,
+      date: toIso(a.signedAt),
+      comment: a.metadata?.comment ?? "",
+    }));
+
+    const firstCert = certificates[0];
+
     return successResponse({
-      ...doc,
-      approvals,
+      id: doc.id,
+      title: doc.title,
+      description: doc.description,
+      status: doc.status,
+      fileName: doc.fileName,
+      fileSize: doc.fileSizeBytes,
+      pageCount: doc.pageCount,
+      sha256Hash: doc.sha256Hash,
+      uploadedBy: names.get(doc.uploadedBy) ?? "Unknown",
+      uploadedAt: toIso(doc.uploadedAt),
+      classification: doc.classification,
+      requiredApprovals: doc.requiredApprovals,
+      currentApprovals: doc.currentApprovals,
+      expiresAt: toIso(doc.expiresAt),
+      approvals: enrichedApprovals,
+      hasCertificate: certificates.length > 0,
+      certificateId: firstCert?.id,
       certificates,
     });
   } catch (error) {

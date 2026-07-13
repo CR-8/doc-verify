@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
   try {
     validateCsrf(request);
     const { user } = await authenticateRequest(request);
-    await requireRole(user.uid, "approver");
+    await requireRole(user.uid, "viewer");
     logger.info("Document upload: authorized", { action: "document_upload_auth", correlationId, userId: user.uid });
     await checkRateLimit("POST", "/api/documents/upload-url", request.headers.get("x-forwarded-for") || "unknown");
 

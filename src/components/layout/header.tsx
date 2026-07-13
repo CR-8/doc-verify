@@ -15,6 +15,8 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/lib/auth/auth-context";
+import { ROLE_LABELS, ROLE_BADGE_CLASSES } from "@/lib/auth/roles";
+import { cn as cx } from "@/lib/utils";
 
 interface HeaderProps {
   title: string;
@@ -86,11 +88,21 @@ export function Header({ title, onMenuToggle, className }: HeaderProps) {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-col gap-1.5">
                   <p className="text-sm font-medium">{displayName}</p>
                   <p className="text-xs font-normal text-muted-foreground">
                     {email}
                   </p>
+                  {user?.role && (
+                    <span
+                      className={cx(
+                        "mt-0.5 inline-flex w-fit items-center rounded-full px-2 py-0.5 text-[10px] font-medium",
+                        ROLE_BADGE_CLASSES[user.role]
+                      )}
+                    >
+                      {ROLE_LABELS[user.role]}
+                    </span>
+                  )}
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />

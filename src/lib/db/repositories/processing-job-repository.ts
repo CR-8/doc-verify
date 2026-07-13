@@ -76,4 +76,14 @@ export const processingJobRepository = {
       .get();
     return snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as ProcessingJob));
   },
+
+  // No orderBy so this needs only a single-field index on documentId; callers
+  // that care about ordering sort in memory.
+  async listByDocument(documentId: string): Promise<ProcessingJob[]> {
+    const snapshot = await adminDb
+      .collection(COLLECTION)
+      .where("documentId", "==", documentId)
+      .get();
+    return snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as ProcessingJob));
+  },
 };

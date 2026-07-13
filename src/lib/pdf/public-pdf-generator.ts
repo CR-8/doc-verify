@@ -5,7 +5,9 @@ export async function generatePublicPdf(
   originalBuffer: Buffer,
   documentId: string
 ): Promise<Buffer> {
-  const pdfDoc = await PDFDocument.load(originalBuffer);
+  // Uploaded PDFs frequently carry permission/owner-password encryption with an
+  // empty user password; ignoreEncryption lets pdf-lib load and stamp them.
+  const pdfDoc = await PDFDocument.load(originalBuffer, { ignoreEncryption: true });
   const qrUrl = await generateDocumentQrUrl(documentId);
   const qrBuffer = await generateQrBuffer({ url: qrUrl });
   const qrImage = await pdfDoc.embedPng(qrBuffer);

@@ -15,13 +15,18 @@ import {
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/lib/auth/auth-context";
+import { roleGte, type RoleLevel } from "@/lib/auth/roles";
 
-const navItems = [
-  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { label: "Documents", href: "/dashboard/documents", icon: FileText },
-  { label: "Approvals", href: "/dashboard/approvals", icon: Stamp },
-  { label: "Users", href: "/dashboard/users", icon: Users },
-  { label: "Settings", href: "/dashboard/settings", icon: Settings },
+// `minRole` mirrors the role each backing API enforces, so the nav only shows
+// destinations the user can actually open (documents/approvals require viewer,
+// user & settings management require admin).
+const navItems: Array<{ label: string; href: string; icon: typeof LayoutDashboard; minRole: RoleLevel }> = [
+  { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard, minRole: "viewer" },
+  { label: "Documents", href: "/dashboard/documents", icon: FileText, minRole: "viewer" },
+  { label: "Approvals", href: "/dashboard/approvals", icon: Stamp, minRole: "viewer" },
+  { label: "Users", href: "/dashboard/users", icon: Users, minRole: "admin" },
+  { label: "Settings", href: "/dashboard/settings", icon: Settings, minRole: "admin" },
 ];
 
 interface SidebarProps {
@@ -33,6 +38,10 @@ interface SidebarProps {
 export function Sidebar({ className, isOpen, onToggle }: SidebarProps) {
   const pathname = usePathname();
   const { theme, setTheme } = useTheme();
+  const { user } = useAuth();
+  const visibleNavItems = navItems.filter(
+    (item) => user && roleGte(user.role, item.minRole)
+  );
 
   return (
     <>
@@ -71,7 +80,7 @@ export function Sidebar({ className, isOpen, onToggle }: SidebarProps) {
         </div>
 
         <nav className="flex-1 space-y-1 p-3">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const Icon = item.icon;
             const isActive =
               pathname === item.href ||

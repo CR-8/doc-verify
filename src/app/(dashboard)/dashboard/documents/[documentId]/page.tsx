@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,6 +26,8 @@ import { Separator } from "@/components/ui/separator";
 import { PageHeader } from "@/components/shared/page-header";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { LoadingState } from "@/components/shared/loading-state";
+import { useAuth } from "@/lib/auth/auth-context";
+import { roleGte } from "@/lib/auth/roles";
 
 interface ApprovalRecord {
   id: string;
@@ -60,8 +63,11 @@ function formatBytes(bytes: number): string {
 
 export default function DocumentDetailPage() {
   const params = useParams<{ documentId: string }>();
+  const { user } = useAuth();
+  const canApprove = !!user && roleGte(user.role, "approver");
   const [doc, setDoc] = React.useState<DocumentData | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [reprocessing, setReprocessing] = React.useState(false);
 
   async function handleDownload(url: string) {
     try {
@@ -75,23 +81,52 @@ export default function DocumentDetailPage() {
     }
   }
 
-  React.useEffect(() => {
-    async function load() {
-      try {
-        const { data } = await apiClient.get<any>(`/api/documents/${params.documentId}`);
-        setDoc(data?.document ?? data ?? null);
-      } catch (err) {
-        toast({
-          title: "Failed to load document",
-          description: err instanceof Error ? err.message : undefined,
-          variant: "destructive",
-        });
-      } finally {
-        setLoading(false);
-      }
+  const load = React.useCallback(async () => {
+    try {
+      const { data } = await apiClient.get<any>(`/api/documents/${params.documentId}`);
+      setDoc(data?.document ?? data ?? null);
+    } catch (err) {
+      toast({
+        title: "Failed to load document",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
     }
-    load();
   }, [params.documentId]);
+
+  async function handleReprocess() {
+    setReprocessing(true);
+    try {
+      const { data } = await apiClient.post<{ retried: number; totalFailed: number }>(
+        `/api/documents/${params.documentId}/reprocess`,
+        {}
+      );
+      const retried = data?.retried ?? 0;
+      const totalFailed = data?.totalFailed ?? 0;
+      toast({
+        title: retried > 0 ? "Reprocessing triggered" : "Nothing to retry",
+        description:
+          totalFailed === 0
+            ? "No failed processing jobs for this document."
+            : `Retried ${retried} of ${totalFailed} failed job(s).`,
+      });
+      await load();
+    } catch (err) {
+      toast({
+        title: "Failed to reprocess document",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
+    } finally {
+      setReprocessing(false);
+    }
+  }
+
+  React.useEffect(() => {
+    load();
+  }, [load]);
 
   if (loading) return <LoadingState type="loading" />;
 
@@ -239,7 +274,7 @@ export default function DocumentDetailPage() {
                 <Download className="mr-2 h-4 w-4" />
                 Download Internal PDF
               </Button>
-              {doc.status === "pending_approval" && (
+              {doc.status === "pending_approval" && canApprove && (
                 <Button className="w-full" asChild>
                   <Link href={`/dashboard/documents/${doc.id}/approve`}>
                     <CheckCircle2 className="mr-2 h-4 w-4" />
@@ -247,6 +282,10 @@ export default function DocumentDetailPage() {
                   </Link>
                 </Button>
               )}
+              <Button className="w-full" variant="ghost" onClick={handleReprocess} disabled={reprocessing}>
+                <RefreshCw className={`mr-2 h-4 w-4 ${reprocessing ? "animate-spin" : ""}`} />
+                {reprocessing ? "Reprocessing..." : "Retry Processing"}
+              </Button>
             </CardContent>
           </Card>
 

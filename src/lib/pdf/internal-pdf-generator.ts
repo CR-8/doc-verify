@@ -17,7 +17,9 @@ export async function generateInternalPdf(
   documentId: string,
   signatures: SignatureData[]
 ): Promise<Buffer> {
-  const pdfDoc = await PDFDocument.load(originalBuffer);
+  // Uploaded PDFs frequently carry permission/owner-password encryption with an
+  // empty user password; ignoreEncryption lets pdf-lib load and stamp them.
+  const pdfDoc = await PDFDocument.load(originalBuffer, { ignoreEncryption: true });
   const documentQrUrl = await generateDocumentQrUrl(documentId);
   const documentQrBuffer = await generateQrBuffer({ url: documentQrUrl });
   const documentQrImage = await pdfDoc.embedPng(documentQrBuffer);

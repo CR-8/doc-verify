@@ -87,11 +87,11 @@ export default function DashboardPage() {
           activeUsers: usersList.filter(
             (u: { status: string }) => u.status === "active"
           ).length,
-          recentDocuments: docList.slice(0, 5).map((d: { id: string; title: string; status: string; uploadedBy?: string; createdAt?: string; date?: string }) => ({
+          recentDocuments: docList.slice(0, 5).map((d: { id: string; title: string; status: string; uploadedBy?: string; uploadedByName?: string; createdAt?: string; date?: string }) => ({
             id: d.id,
             title: d.title,
             status: d.status,
-            uploadedBy: d.uploadedBy,
+            uploadedBy: d.uploadedByName ?? d.uploadedBy,
             createdAt: d.createdAt ?? d.date ?? "",
           })),
         });

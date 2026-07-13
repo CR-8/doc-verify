@@ -10,6 +10,7 @@ import { documentRepository } from "@/lib/db/repositories/document-repository";
 import { virusScanner } from "@/lib/virus-scanner/scanner";
 import { hashDocument } from "@/lib/crypto/hash";
 import { getKeyManagementService } from "@/lib/crypto/key-management";
+import { PDFDocument } from "pdf-lib";
 import { enqueueJob } from "@/lib/jobs/processing-queue";
 import { createAuditLog } from "@/lib/audit/audit-logger";
 import { logger } from "@/lib/logger/logger";
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
     validateCsrf(request);
     const { user } = await authenticateRequest(request);
     logger.info("Document complete: authenticated", { action: "document_complete_auth", correlationId, userId: user.uid });
-    await requireRole(user.uid, "approver");
+    await requireRole(user.uid, "viewer");
     logger.info("Document complete: role authorized", { action: "document_complete_role", correlationId, userId: user.uid });
     await checkRateLimit("POST", "/api/documents/complete", request.headers.get("x-forwarded-for") || "unknown");
 
@@ -66,12 +67,28 @@ export async function POST(request: NextRequest) {
     const sha256Hash = hashDocument(buffer);
     const kms = getKeyManagementService();
 
+    // Read the real page count up front so the document record and UI never show
+    // "0 pages". A malformed PDF should not fail the whole upload, so fall back
+    // to 0 and let downstream PDF generation surface any real corruption.
+    let pageCount = 0;
+    try {
+      const parsed = await PDFDocument.load(buffer, { ignoreEncryption: true });
+      pageCount = parsed.getPageCount();
+    } catch (err) {
+      logger.warn("Document complete: could not read page count", {
+        action: "document_complete_pagecount_failed",
+        correlationId,
+        userId: user.uid,
+        metadata: { error: err instanceof Error ? err.message : String(err) },
+      });
+    }
+
     const doc = await documentRepository.create({
       title: body.title,
       description: body.description || "",
       fileName: `${body.uploadId}.pdf`,
       fileSizeBytes: fileSize,
-      pageCount: 0,
+      pageCount,
       sha256Hash,
       status: "processing",
       uploadedBy: user.uid,

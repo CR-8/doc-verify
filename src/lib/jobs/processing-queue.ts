@@ -98,14 +98,23 @@ async function handleInternalPdfGeneration(documentId: string, _jobId: string): 
   const approvals = await approvalsModule.approvalRepository.getByDocumentId(documentId);
   const signedApprovals = approvals.filter((a) => a.status === "signed");
 
-  const signatures = signedApprovals.map((a) => ({
-    verificationToken: a.verificationToken,
-    signerName: "",
-    signerDesignation: "",
-    signedAt: a.signedAt?.toDate?.()?.toISOString() || "",
-    signatureHash: a.signatureHash,
-    preferredPage: a.signaturePage || undefined,
-  }));
+  // Signer name/designation live on the certificate generated for each approval;
+  // map them in by verification token so the internal PDF labels each signature
+  // with a real name instead of a blank.
+  const certs = await certificateRepository.getByDocumentId(documentId);
+  const certByToken = new Map(certs.map((c) => [c.verificationToken, c]));
+
+  const signatures = signedApprovals.map((a) => {
+    const cert = certByToken.get(a.verificationToken);
+    return {
+      verificationToken: a.verificationToken,
+      signerName: cert?.signerName || "",
+      signerDesignation: cert?.signerDesignation || "",
+      signedAt: a.signedAt?.toDate?.()?.toISOString() || "",
+      signatureHash: a.signatureHash,
+      preferredPage: a.signaturePage || undefined,
+    };
+  });
 
   const buffer = await storageService.getOriginalBuffer(documentId, doc.encryptedDataKey);
   const internalPdf = await generateInternalPdf(buffer, documentId, signatures);
