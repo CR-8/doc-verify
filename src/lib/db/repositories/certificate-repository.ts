@@ -43,6 +43,17 @@ export const certificateRepository = {
     });
   },
 
+  async deleteByDocumentId(documentId: string): Promise<void> {
+    const snapshot = await adminDb
+      .collection(COLLECTION)
+      .where("documentId", "==", documentId)
+      .get();
+    if (snapshot.empty) return;
+    const batch = adminDb.batch();
+    snapshot.docs.forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+  },
+
   async getByToken(verificationToken: string): Promise<Certificate | null> {
     const snapshot = await adminDb
       .collection(COLLECTION)

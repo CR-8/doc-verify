@@ -85,4 +85,15 @@ export const approvalRepository = {
       .get();
     return sortBySignedAt(snapshot.docs.map((d) => d.data()), "desc");
   },
+
+  async deleteByDocumentId(documentId: string): Promise<void> {
+    const snapshot = await adminDb
+      .collection(COLLECTION)
+      .where("documentId", "==", documentId)
+      .get();
+    if (snapshot.empty) return;
+    const batch = adminDb.batch();
+    snapshot.docs.forEach((d) => batch.delete(d.ref));
+    await batch.commit();
+  },
 };

@@ -14,7 +14,7 @@ export const DocumentUploadCompleteSchema = z.object({
   description: z.string().max(2000).default(""),
   metadata: z.record(z.string()).optional(),
   classification: z.string().default("unclassified"),
-  requiredApprovals: z.number().int().min(1).max(100).default(1),
+  requiredApprovals: z.number().int().min(1).default(1),
   expiresAt: z.string().datetime().optional(),
 });
 

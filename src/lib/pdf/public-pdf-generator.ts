@@ -16,17 +16,21 @@ export async function generatePublicPdf(
   for (const page of pages) {
     const { width } = page.getSize();
     const qrSize = 72;
+    // Watermark-style: keeps page content underneath readable while
+    // staying dark enough to scan (EC level M).
     page.drawImage(qrImage, {
       x: width - qrSize - 10,
       y: 10,
       width: qrSize,
       height: qrSize,
+      opacity: 0.45,
     });
     page.drawText("Verify at " + qrUrl, {
       x: width - qrSize - 10,
       y: qrSize + 15,
       size: 6,
       color: rgb(0.4, 0.4, 0.4),
+      opacity: 0.45,
     });
   }
 
