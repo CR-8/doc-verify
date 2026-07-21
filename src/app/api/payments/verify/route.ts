@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
       throw new AppError(ErrorCodes.VALIDATION_ERROR, "Missing payment verification fields", 400);
     }
 
-    const creds = getRazorpayCredentials();
+    const creds = await getRazorpayCredentials();
     if (!creds) {
       throw new AppError(ErrorCodes.INTERNAL_ERROR, "Payment gateway is not configured", 503);
     }

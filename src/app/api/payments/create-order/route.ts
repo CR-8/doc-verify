@@ -26,11 +26,11 @@ export async function POST(request: NextRequest) {
       throw new AppError(ErrorCodes.VALIDATION_ERROR, "Unknown or non-purchasable plan", 400);
     }
 
-    const creds = getRazorpayCredentials();
+    const creds = await getRazorpayCredentials();
     if (!creds) {
       throw new AppError(
         ErrorCodes.INTERNAL_ERROR,
-        "Payment gateway is not configured yet. Add RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET.",
+        "Payment gateway is not configured yet. Add your Razorpay keys in Settings → API.",
         503
       );
     }

@@ -41,9 +41,28 @@ export const PAID_PLANS: Record<string, PaidPlanDef> = {
 
 export const RAZORPAY_API_BASE = "https://api.razorpay.com/v1";
 
-export function getRazorpayCredentials(): { keyId: string; keySecret: string } | null {
-  const keyId = process.env.RAZORPAY_KEY_ID;
-  const keySecret = process.env.RAZORPAY_KEY_SECRET;
+// Credentials can be managed from the dashboard Settings → API tab (stored in
+// the Firestore `settings` collection, admin-only) or via environment
+// variables. The dashboard values take priority so keys can be rotated
+// without a redeploy.
+export async function getRazorpayCredentials(): Promise<{ keyId: string; keySecret: string } | null> {
+  let storedKeyId = "";
+  let storedKeySecret = "";
+  try {
+    const { getAdminDb } = await import("@/lib/db/firebase");
+    const adminDb = getAdminDb();
+    const [idDoc, secretDoc] = await Promise.all([
+      adminDb.collection("settings").doc("razorpayKeyId").get(),
+      adminDb.collection("settings").doc("razorpayKeySecret").get(),
+    ]);
+    storedKeyId = (idDoc.data()?.value as string) || "";
+    storedKeySecret = (secretDoc.data()?.value as string) || "";
+  } catch {
+    // Firestore unavailable — fall back to env vars below.
+  }
+
+  const keyId = storedKeyId || process.env.RAZORPAY_KEY_ID || "";
+  const keySecret = storedKeySecret || process.env.RAZORPAY_KEY_SECRET || "";
   if (!keyId || !keySecret) return null;
   return { keyId, keySecret };
 }

@@ -30,6 +30,42 @@ interface SettingsData {
     certificateGenerated?: boolean;
   };
   apiKey?: string;
+  razorpayKeyId?: string;
+  razorpayKeySecret?: string;
+}
+
+function SecretInput({
+  id,
+  value,
+  onChange,
+  placeholder,
+}: {
+  id: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
+  const [visible, setVisible] = React.useState(false);
+  return (
+    <div className="relative">
+      <Input
+        id={id}
+        type={visible ? "text" : "password"}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="pr-9 font-mono text-xs"
+        autoComplete="off"
+      />
+      <button
+        type="button"
+        onClick={() => setVisible(!visible)}
+        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+      >
+        {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+      </button>
+    </div>
+  );
 }
 
 export default function SettingsPage() {
@@ -45,6 +81,8 @@ export default function SettingsPage() {
   const [mfaEnabled, setMfaEnabled] = React.useState(false);
   const [sessionTimeout, setSessionTimeout] = React.useState("30");
   const [passwordPolicy, setPasswordPolicy] = React.useState(false);
+  const [razorpayKeyId, setRazorpayKeyId] = React.useState("");
+  const [razorpayKeySecret, setRazorpayKeySecret] = React.useState("");
   const [notifications, setNotifications] = React.useState({
     documentUploaded: false,
     approvalRequested: false,
@@ -65,6 +103,8 @@ export default function SettingsPage() {
         setMfaEnabled(s.mfaEnabled ?? false);
         setSessionTimeout(s.sessionTimeout ?? "30");
         setPasswordPolicy(s.passwordPolicy ?? false);
+        setRazorpayKeyId(s.razorpayKeyId ?? "");
+        setRazorpayKeySecret(s.razorpayKeySecret ?? "");
         setNotifications({
           documentUploaded: s.notifications?.documentUploaded ?? false,
           approvalRequested: s.notifications?.approvalRequested ?? false,
@@ -97,6 +137,8 @@ export default function SettingsPage() {
         sessionTimeout,
         passwordPolicy,
         notifications,
+        razorpayKeyId,
+        razorpayKeySecret,
       };
       await apiClient.patch<any>("/api/settings", updated);
       setSettings((prev) => ({ ...prev, ...updated }));
@@ -325,7 +367,38 @@ export default function SettingsPage() {
           <TabsContent value="api" className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">API Keys</CardTitle>
+                <CardTitle className="text-lg">Payment Gateway — Razorpay</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="razorpay-key-id">Razorpay Key ID</Label>
+                  <SecretInput
+                    id="razorpay-key-id"
+                    value={razorpayKeyId}
+                    onChange={setRazorpayKeyId}
+                    placeholder="rzp_test_..."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="razorpay-key-secret">Razorpay Key Secret</Label>
+                  <SecretInput
+                    id="razorpay-key-secret"
+                    value={razorpayKeySecret}
+                    onChange={setRazorpayKeySecret}
+                    placeholder="Enter your Razorpay key secret"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Generate keys at dashboard.razorpay.com → Settings → API Keys. Use Test Mode keys
+                  (rzp_test_...) to try payments safely; switch to Live keys when you are ready to
+                  charge real money. Saved keys take effect immediately — no redeploy needed.
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">DocVerify API Key</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
