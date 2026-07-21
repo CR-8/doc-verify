@@ -13,6 +13,7 @@ import {
   X,
   Moon,
   Sun,
+  Crown,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
@@ -124,6 +125,24 @@ export function Sidebar({ className, isOpen, onToggle }: SidebarProps) {
             )}
             {isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
           </Button>
+        </div>
+
+        <div className="border-t p-3">
+          <Link
+            href="/dashboard/plans"
+            className="flex items-center justify-between rounded-md border bg-accent/40 px-3 py-2 transition-colors hover:bg-accent"
+          >
+            <span className="flex items-center gap-2">
+              <Crown className="size-4 text-amber-500" />
+              <span className="flex flex-col leading-tight">
+                <span className="text-sm font-medium">FREE Plan</span>
+                <span className="text-[11px] text-muted-foreground">10 uploads</span>
+              </span>
+            </span>
+            <span className="rounded-full bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-foreground">
+              Upgrade
+            </span>
+          </Link>
         </div>
       </aside>
     </>
