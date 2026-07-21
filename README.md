@@ -1,6 +1,6 @@
 # DocVerify (E-STAMP) — Document Verification & Electronic Approval Platform
 
-**🌐 Live Website:** [https://doc-verify-iota.vercel.app/dashboard](https://doc-verify-iota.vercel.app/dashboard)
+**🌐 Live Website:** [https://doc-verify-iota.vercel.app/](https://doc-verify-iota.vercel.app/)
 
 **© 2026 Shreyansh Srivastava. All Rights Reserved.**
 
