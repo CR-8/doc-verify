@@ -1,3 +1,14 @@
+# DocVerify — Document Verification & Electronic Approval Platform
+
+**© 2026 Shreyansh Srivastava. All Rights Reserved.**
+
+This is proprietary software. No part of this repository may be used, copied,
+modified, or distributed without prior written permission from the author.
+See the [LICENSE](LICENSE) file for full terms. For licensing enquiries,
+contact sshreyansh8070@gmail.com.
+
+---
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
