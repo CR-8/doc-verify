@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -37,8 +38,12 @@ interface SidebarProps {
 
 export function Sidebar({ className, isOpen, onToggle }: SidebarProps) {
   const pathname = usePathname();
-  const { theme, setTheme } = useTheme();
+  const { resolvedTheme, setTheme } = useTheme();
   const { user } = useAuth();
+  // Avoid a hydration mismatch: the theme is unknown until mounted.
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => setMounted(true), []);
+  const isDark = mounted && resolvedTheme === "dark";
   const visibleNavItems = navItems.filter(
     (item) => user && roleGte(user.role, item.minRole)
   );
@@ -110,14 +115,14 @@ export function Sidebar({ className, isOpen, onToggle }: SidebarProps) {
             variant="ghost"
             size="sm"
             className="w-full justify-start gap-2"
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            onClick={() => setTheme(isDark ? "light" : "dark")}
           >
-            {theme === "dark" ? (
+            {isDark ? (
               <Sun className="size-4" />
             ) : (
               <Moon className="size-4" />
             )}
-            {theme === "dark" ? "Light Mode" : "Dark Mode"}
+            {isDark ? "Switch to Light Mode" : "Switch to Dark Mode"}
           </Button>
         </div>
       </aside>
