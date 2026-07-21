@@ -89,7 +89,7 @@ export default function SettingsPage() {
     e.preventDefault();
     setSaving(true);
     try {
-      const { data: saveData } = await apiClient.post<any>("/api/settings", {
+      const updated = {
         companyName,
         defaultLanguage,
         timezone,
@@ -97,10 +97,16 @@ export default function SettingsPage() {
         sessionTimeout,
         passwordPolicy,
         notifications,
+      };
+      await apiClient.patch<any>("/api/settings", updated);
+      setSettings((prev) => ({ ...prev, ...updated }));
+      toast({ title: "Settings saved" });
+    } catch (err) {
+      toast({
+        title: "Failed to save settings",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
       });
-      setSettings(saveData?.settings ?? saveData);
-    } catch {
-      alert("Failed to save settings");
     } finally {
       setSaving(false);
     }
@@ -109,12 +115,18 @@ export default function SettingsPage() {
   async function handleRegenerateApiKey() {
     if (!confirm("Regenerate API key? This will invalidate the current key.")) return;
     try {
-      const { data: apiData } = await apiClient.post<any>("/api/settings", {
+      const { data: apiData } = await apiClient.patch<any>("/api/settings", {
         regenerateApiKey: true,
       });
-      setSettings((prev) => prev ? { ...prev, apiKey: apiData?.settings?.apiKey ?? apiData?.apiKey } : prev);
-    } catch {
-      alert("Failed to regenerate API key");
+      const newKey = apiData?.apiKey ?? apiData?.settings?.apiKey;
+      if (newKey) setSettings((prev) => ({ ...prev, apiKey: newKey }));
+      toast({ title: "API key regenerated" });
+    } catch (err) {
+      toast({
+        title: "Failed to regenerate API key",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
     }
   }
 
