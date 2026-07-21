@@ -1,7 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { Check, Crown, Zap, Rocket, Infinity as InfinityIcon, Building2 } from "lucide-react";
+import { Check, Crown, Zap, Rocket, Infinity as InfinityIcon, Building2, Loader2 } from "lucide-react";
+import { apiClient } from "@/lib/api-client";
+import { useAuth } from "@/lib/auth/auth-context";
 import { toast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -19,6 +21,7 @@ interface Plan {
   highlight?: boolean;
   cta: string;
   custom?: boolean;
+  purchasable?: boolean;
 }
 
 const PLANS: Plan[] = [
@@ -41,6 +44,7 @@ const PLANS: Plan[] = [
     capacity: "10 – 25 uploads / month",
     features: ["Up to 25 uploads every month", "QR verification", "E-signature approvals", "Email support"],
     cta: "Choose PRO",
+    purchasable: true,
   },
   {
     key: "super",
@@ -52,6 +56,7 @@ const PLANS: Plan[] = [
     features: ["Up to 100 uploads per quarter", "QR verification", "E-signature approvals", "Priority email support"],
     highlight: true,
     cta: "Choose SUPER",
+    purchasable: true,
   },
   {
     key: "ultra",
@@ -62,6 +67,7 @@ const PLANS: Plan[] = [
     capacity: "100 – Unlimited uploads / year",
     features: ["Unlimited uploads all year", "QR verification", "E-signature approvals", "Priority support", "Early access to new features"],
     cta: "Choose ULTRA",
+    purchasable: true,
   },
   {
     key: "business",
@@ -76,12 +82,56 @@ const PLANS: Plan[] = [
   },
 ];
 
-const CURRENT_PLAN = "free";
+declare global {
+  interface Window {
+    Razorpay?: new (options: Record<string, unknown>) => { open: () => void };
+  }
+}
+
+function loadRazorpayScript(): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (window.Razorpay) return resolve(true);
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
 
 export default function PlansPage() {
-  function handleSelect(plan: Plan) {
-    if (plan.key === CURRENT_PLAN) {
-      toast({ title: "You are already on the FREE plan" });
+  const { user } = useAuth();
+  const [currentPlan, setCurrentPlan] = React.useState("free");
+  const [planExpiresAt, setPlanExpiresAt] = React.useState<string | null>(null);
+  const [payingPlan, setPayingPlan] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await apiClient.get<any>(`/api/users/${user.uid}`);
+        if (cancelled || !data) return;
+        setCurrentPlan(data.plan ?? "free");
+        const exp = data.planExpiresAt;
+        if (exp) {
+          const s = typeof exp === "object" ? (exp._seconds ?? exp.seconds) : null;
+          setPlanExpiresAt(
+            typeof s === "number" ? new Date(s * 1000).toLocaleDateString() : String(exp)
+          );
+        }
+      } catch {
+        // Non-fatal: keep showing "free".
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+
+  async function handleSelect(plan: Plan) {
+    if (plan.key === currentPlan) {
+      toast({ title: `You are already on the ${plan.name} plan` });
       return;
     }
     if (plan.custom) {
@@ -89,34 +139,99 @@ export default function PlansPage() {
         "mailto:sshreyansh8070@gmail.com?subject=DocVerify%20BUSINESS%20plan%20enquiry";
       return;
     }
-    toast({
-      title: `${plan.name} plan selected`,
-      description: "Online payments are not set up yet — contact the administrator to activate this plan.",
-    });
+    if (!plan.purchasable) return;
+
+    setPayingPlan(plan.key);
+    try {
+      const { data: order } = await apiClient.post<any>("/api/payments/create-order", {
+        plan: plan.key,
+      });
+
+      const loaded = await loadRazorpayScript();
+      if (!loaded || !window.Razorpay) {
+        throw new Error("Could not load the payment window. Check your connection and try again.");
+      }
+
+      const rzp = new window.Razorpay({
+        key: order.keyId,
+        amount: order.amount,
+        currency: order.currency,
+        name: "DocVerify",
+        description: `${plan.name} plan — ${plan.capacity}`,
+        order_id: order.orderId,
+        prefill: { name: user?.displayName ?? "", email: user?.email ?? "" },
+        theme: { color: "#4f46e5" },
+        modal: { ondismiss: () => setPayingPlan(null) },
+        handler: async (response: Record<string, string>) => {
+          try {
+            const { data: result } = await apiClient.post<any>("/api/payments/verify", response);
+            setCurrentPlan(result?.plan ?? plan.key);
+            if (result?.expiresAt) {
+              setPlanExpiresAt(new Date(result.expiresAt).toLocaleDateString());
+            }
+            toast({
+              title: `${plan.name} plan activated`,
+              description: result?.expiresAt
+                ? `Valid until ${new Date(result.expiresAt).toLocaleDateString()}`
+                : undefined,
+            });
+          } catch (err) {
+            toast({
+              title: "Payment made but activation failed",
+              description:
+                (err instanceof Error ? err.message : "") +
+                " Contact the administrator with your payment ID.",
+              variant: "destructive",
+            });
+          } finally {
+            setPayingPlan(null);
+          }
+        },
+      });
+      rzp.open();
+    } catch (err) {
+      setPayingPlan(null);
+      toast({
+        title: "Could not start payment",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
+    }
   }
 
   return (
     <div className="space-y-6">
       <PageHeader
         title="Subscription Plans"
-        description="Choose the plan that fits your document upload needs"
+        description={
+          planExpiresAt && currentPlan !== "free"
+            ? `Current plan: ${currentPlan.toUpperCase()} (valid until ${planExpiresAt})`
+            : "Choose the plan that fits your document upload needs"
+        }
       />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         {PLANS.map((plan) => {
           const Icon = plan.icon;
-          const isCurrent = plan.key === CURRENT_PLAN;
+          const isCurrent = plan.key === currentPlan;
+          const isPaying = payingPlan === plan.key;
           return (
             <Card
               key={plan.key}
               className={cn(
                 "relative flex flex-col",
-                plan.highlight && "border-primary shadow-md"
+                plan.highlight && "border-primary shadow-md",
+                isCurrent && "border-emerald-500"
               )}
             >
-              {plan.highlight && (
+              {plan.highlight && !isCurrent && (
                 <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-primary px-3 py-0.5 text-xs font-medium text-primary-foreground">
                   Most Popular
+                </span>
+              )}
+              {isCurrent && (
+                <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-emerald-600 px-3 py-0.5 text-xs font-medium text-white">
+                  Your Plan
                 </span>
               )}
               <CardHeader className="pb-2">
@@ -143,9 +258,10 @@ export default function PlansPage() {
                   className="w-full"
                   size="sm"
                   variant={isCurrent ? "outline" : plan.highlight ? "default" : "secondary"}
-                  disabled={isCurrent}
+                  disabled={isCurrent || isPaying}
                   onClick={() => handleSelect(plan)}
                 >
+                  {isPaying && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {isCurrent ? "Current Plan" : plan.cta}
                 </Button>
               </CardContent>
@@ -155,8 +271,9 @@ export default function PlansPage() {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Prices are in Indian Rupees (₹). Upload capacity counts documents uploaded within the plan
-        period. For custom requirements, choose the BUSINESS plan to get in touch.
+        Prices are in Indian Rupees (₹) and processed securely via Razorpay. Upload capacity counts
+        documents uploaded within the plan period. For custom requirements, choose the BUSINESS plan
+        to get in touch.
       </p>
     </div>
   );

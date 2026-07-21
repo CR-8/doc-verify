@@ -23,6 +23,9 @@ export const userConverter: FirestoreDataConverter<User> = {
       phone: data.phone || "",
       createdAt: data.createdAt,
       lastLoginAt: data.lastLoginAt,
+      plan: data.plan || "free",
+      planActivatedAt: data.planActivatedAt ?? null,
+      planExpiresAt: data.planExpiresAt ?? null,
     };
   },
 };

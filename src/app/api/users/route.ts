@@ -52,6 +52,9 @@ export async function POST(request: NextRequest) {
       phone: body.phone || "",
       createdAt: null as unknown as any,
       lastLoginAt: null as unknown as any,
+      plan: "free",
+      planActivatedAt: null,
+      planExpiresAt: null,
     });
     await createAuditLog({
       action: "USER_CREATED",

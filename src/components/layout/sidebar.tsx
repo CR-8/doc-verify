@@ -17,8 +17,17 @@ import {
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
+import { apiClient } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth/auth-context";
 import { roleGte, type RoleLevel } from "@/lib/auth/roles";
+
+const PLAN_SUMMARY: Record<string, { label: string; capacity: string }> = {
+  free: { label: "FREE Plan", capacity: "10 uploads" },
+  pro: { label: "PRO Plan", capacity: "25 uploads / month" },
+  super: { label: "SUPER Plan", capacity: "100 uploads / 3 months" },
+  ultra: { label: "ULTRA Plan", capacity: "Unlimited uploads" },
+  business: { label: "BUSINESS Plan", capacity: "Custom capacity" },
+};
 
 // `minRole` mirrors the role each backing API enforces, so the nav only shows
 // destinations the user can actually open (documents/approvals require viewer,
@@ -45,6 +54,22 @@ export function Sidebar({ className, isOpen, onToggle }: SidebarProps) {
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => setMounted(true), []);
   const isDark = mounted && resolvedTheme === "dark";
+
+  const [plan, setPlan] = React.useState<string>("free");
+  React.useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    apiClient
+      .get<{ plan?: string }>(`/api/users/${user.uid}`)
+      .then(({ data }) => {
+        if (!cancelled && data?.plan) setPlan(data.plan);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
+  const planInfo = PLAN_SUMMARY[plan] ?? PLAN_SUMMARY.free;
   const visibleNavItems = navItems.filter(
     (item) => user && roleGte(user.role, item.minRole)
   );
@@ -135,13 +160,15 @@ export function Sidebar({ className, isOpen, onToggle }: SidebarProps) {
             <span className="flex items-center gap-2">
               <Crown className="size-4 text-amber-500" />
               <span className="flex flex-col leading-tight">
-                <span className="text-sm font-medium">FREE Plan</span>
-                <span className="text-[11px] text-muted-foreground">10 uploads</span>
+                <span className="text-sm font-medium">{planInfo.label}</span>
+                <span className="text-[11px] text-muted-foreground">{planInfo.capacity}</span>
               </span>
             </span>
-            <span className="rounded-full bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-foreground">
-              Upgrade
-            </span>
+            {plan === "free" && (
+              <span className="rounded-full bg-primary px-2 py-0.5 text-[11px] font-medium text-primary-foreground">
+                Upgrade
+              </span>
+            )}
           </Link>
         </div>
       </aside>
