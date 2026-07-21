@@ -106,7 +106,7 @@ export function Header({ title, onMenuToggle, className }: HeaderProps) {
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push("/dashboard/profile")}>
                 <User className="size-4" />
                 Profile
               </DropdownMenuItem>

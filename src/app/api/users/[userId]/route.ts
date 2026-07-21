@@ -15,7 +15,10 @@ export async function GET(
   try {
     const { userId } = await params;
     const { user } = await authenticateRequest(_request);
-    await requireRole(user.uid, "admin");
+    // Users may always read their own profile; other records are admin-only.
+    if (user.uid !== userId) {
+      await requireRole(user.uid, "admin");
+    }
     const userData = await userRepository.getById(userId);
     if (!userData) {
       return handleRouteError(
