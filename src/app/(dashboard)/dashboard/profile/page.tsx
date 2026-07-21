@@ -1,13 +1,22 @@
 "use client";
 
 import * as React from "react";
-import { Mail, Shield, Briefcase, Building2, Phone, CalendarDays, Clock } from "lucide-react";
+import { updateProfile } from "firebase/auth";
+import {
+  Mail, Shield, Briefcase, Building2, Phone, CalendarDays, Clock,
+  Pencil, X, Save, Loader2, UserRound,
+} from "lucide-react";
+import { auth } from "@/lib/firebase/client";
 import { apiClient } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth/auth-context";
+import { toast } from "@/hooks/use-toast";
 import { ROLE_LABELS, ROLE_DESCRIPTIONS, ROLE_BADGE_CLASSES } from "@/lib/auth/roles";
 import { cn } from "@/lib/utils";
 import { Avatar } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { StatusBadge } from "@/components/shared/status-badge";
 import { PageHeader } from "@/components/shared/page-header";
@@ -56,6 +65,13 @@ export default function ProfilePage() {
   const { user, loading: authLoading } = useAuth();
   const [profile, setProfile] = React.useState<ProfileRecord | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [editing, setEditing] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
+
+  const [formName, setFormName] = React.useState("");
+  const [formDesignation, setFormDesignation] = React.useState("");
+  const [formDepartment, setFormDepartment] = React.useState("");
+  const [formPhone, setFormPhone] = React.useState("");
 
   React.useEffect(() => {
     if (!user) return;
@@ -83,9 +99,68 @@ export default function ProfilePage() {
   const role = (profile?.role || user.role) as keyof typeof ROLE_LABELS;
   const isActive = profile?.isActive ?? user.isActive;
 
+  function startEditing() {
+    setFormName(profile?.displayName || user?.displayName || "");
+    setFormDesignation(profile?.designation ?? "");
+    setFormDepartment(profile?.department ?? "");
+    setFormPhone(profile?.phone ?? "");
+    setEditing(true);
+  }
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    if (!user) return;
+    const name = formName.trim();
+    if (!name) {
+      toast({ title: "Name cannot be empty", variant: "destructive" });
+      return;
+    }
+    setSaving(true);
+    try {
+      await apiClient.patch(`/api/users/${user.uid}`, {
+        displayName: name,
+        designation: formDesignation.trim(),
+        department: formDepartment.trim(),
+        phone: formPhone.trim(),
+      });
+      // Keep the Firebase Auth display name in sync so the header shows it too.
+      if (auth.currentUser) {
+        await updateProfile(auth.currentUser, { displayName: name }).catch(() => {});
+      }
+      setProfile((prev) => ({
+        ...prev,
+        displayName: name,
+        designation: formDesignation.trim(),
+        department: formDepartment.trim(),
+        phone: formPhone.trim(),
+      }));
+      setEditing(false);
+      toast({ title: "Profile updated" });
+    } catch (err) {
+      toast({
+        title: "Failed to update profile",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="space-y-6">
-      <PageHeader title="Profile" description="Your account details" />
+      <PageHeader
+        title="Profile"
+        description="Your account details"
+        actions={
+          !editing ? (
+            <Button onClick={startEditing}>
+              <Pencil className="mr-2 h-4 w-4" />
+              Edit Profile
+            </Button>
+          ) : undefined
+        }
+      />
 
       <Card>
         <CardHeader>
@@ -115,19 +190,102 @@ export default function ProfilePage() {
         </CardHeader>
         <CardContent>
           <Separator className="mb-4" />
-          <div className="grid gap-x-8 sm:grid-cols-2">
-            <InfoRow icon={Mail} label="Email" value={email} />
-            <InfoRow
-              icon={Shield}
-              label="Role"
-              value={ROLE_DESCRIPTIONS[role] ? `${ROLE_LABELS[role]} — ${ROLE_DESCRIPTIONS[role]}` : role}
-            />
-            <InfoRow icon={Briefcase} label="Designation" value={profile?.designation} />
-            <InfoRow icon={Building2} label="Department" value={profile?.department} />
-            <InfoRow icon={Phone} label="Phone" value={profile?.phone} />
-            <InfoRow icon={CalendarDays} label="Member since" value={toDisplayDate(profile?.createdAt)} />
-            <InfoRow icon={Clock} label="Last login" value={toDisplayDate(profile?.lastLoginAt)} />
-          </div>
+
+          {editing ? (
+            <form onSubmit={handleSave} className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="profile-name">
+                    <UserRound className="mr-1 inline h-3.5 w-3.5" />
+                    Full Name
+                  </Label>
+                  <Input
+                    id="profile-name"
+                    value={formName}
+                    onChange={(e) => setFormName(e.target.value)}
+                    placeholder="Your real full name"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="profile-designation">
+                    <Briefcase className="mr-1 inline h-3.5 w-3.5" />
+                    Designation
+                  </Label>
+                  <Input
+                    id="profile-designation"
+                    value={formDesignation}
+                    onChange={(e) => setFormDesignation(e.target.value)}
+                    placeholder="e.g. Section Officer"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="profile-department">
+                    <Building2 className="mr-1 inline h-3.5 w-3.5" />
+                    Department
+                  </Label>
+                  <Input
+                    id="profile-department"
+                    value={formDepartment}
+                    onChange={(e) => setFormDepartment(e.target.value)}
+                    placeholder="e.g. Finance"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="profile-phone">
+                    <Phone className="mr-1 inline h-3.5 w-3.5" />
+                    Phone
+                  </Label>
+                  <Input
+                    id="profile-phone"
+                    value={formPhone}
+                    onChange={(e) => setFormPhone(e.target.value)}
+                    placeholder="e.g. +91 98765 43210"
+                    maxLength={20}
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-x-8 sm:grid-cols-2">
+                <InfoRow icon={Mail} label="Email" value={email} />
+                <InfoRow icon={CalendarDays} label="Member since" value={toDisplayDate(profile?.createdAt)} />
+                <InfoRow icon={Clock} label="Last login" value={toDisplayDate(profile?.lastLoginAt)} />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Email, role, member-since and last-login are managed by the system and cannot be edited.
+              </p>
+
+              <div className="flex justify-end gap-3">
+                <Button type="button" variant="outline" onClick={() => setEditing(false)} disabled={saving}>
+                  <X className="mr-2 h-4 w-4" />
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={saving}>
+                  {saving ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="mr-2 h-4 w-4" />
+                  )}
+                  Save Changes
+                </Button>
+              </div>
+            </form>
+          ) : (
+            <div className="grid gap-x-8 sm:grid-cols-2">
+              <InfoRow icon={UserRound} label="Full Name" value={displayName} />
+              <InfoRow icon={Mail} label="Email" value={email} />
+              <InfoRow
+                icon={Shield}
+                label="Role"
+                value={ROLE_DESCRIPTIONS[role] ? `${ROLE_LABELS[role]} — ${ROLE_DESCRIPTIONS[role]}` : role}
+              />
+              <InfoRow icon={Briefcase} label="Designation" value={profile?.designation} />
+              <InfoRow icon={Building2} label="Department" value={profile?.department} />
+              <InfoRow icon={Phone} label="Phone" value={profile?.phone} />
+              <InfoRow icon={CalendarDays} label="Member since" value={toDisplayDate(profile?.createdAt)} />
+              <InfoRow icon={Clock} label="Last login" value={toDisplayDate(profile?.lastLoginAt)} />
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -41,8 +41,17 @@ export async function PATCH(
     validateCsrf(request);
     const { userId } = await params;
     const { user } = await authenticateRequest(request);
-    await requireRole(user.uid, "admin");
+    const isSelf = user.uid === userId;
+    if (!isSelf) {
+      await requireRole(user.uid, "admin");
+    }
     const body = UserUpdateSchema.parse(await request.json());
+    if (isSelf) {
+      // Self-service edits are limited to profile details — never role,
+      // active status, or clearance.
+      delete body.role;
+      delete body.isActive;
+    }
     await userRepository.update(userId, body as any);
     await createAuditLog({
       action: "USER_UPDATED",
