@@ -6,6 +6,7 @@ import { checkRateLimit } from "@/lib/middleware/rate-limiter";
 import { validateCsrf } from "@/lib/middleware/csrf";
 import { storageService } from "@/lib/storage/storage-service";
 import { AppError, ErrorCodes } from "@/constants/errors";
+import { enforceUploadQuota } from "@/lib/payments/quota";
 import { logger } from "@/lib/logger/logger";
 
 export async function POST(request: NextRequest) {
@@ -17,6 +18,7 @@ export async function POST(request: NextRequest) {
     await requireRole(user.uid, "viewer");
     logger.info("Document upload: authorized", { action: "document_upload_auth", correlationId, userId: user.uid });
     await checkRateLimit("POST", "/api/documents/upload-url", request.headers.get("x-forwarded-for") || "unknown");
+    await enforceUploadQuota(user.uid);
 
     const formData = await request.formData();
     const file = formData.get("file") as File | null;

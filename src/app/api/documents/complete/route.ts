@@ -13,6 +13,7 @@ import { getKeyManagementService } from "@/lib/crypto/key-management";
 import { PDFDocument } from "pdf-lib";
 import { enqueueJob } from "@/lib/jobs/processing-queue";
 import { createAuditLog } from "@/lib/audit/audit-logger";
+import { enforceUploadQuota } from "@/lib/payments/quota";
 import { logger } from "@/lib/logger/logger";
 import { Timestamp as AdminTimestamp } from "firebase-admin/firestore";
 
@@ -26,6 +27,7 @@ export async function POST(request: NextRequest) {
     await requireRole(user.uid, "viewer");
     logger.info("Document complete: role authorized", { action: "document_complete_role", correlationId, userId: user.uid });
     await checkRateLimit("POST", "/api/documents/complete", request.headers.get("x-forwarded-for") || "unknown");
+    await enforceUploadQuota(user.uid);
 
     const body = DocumentUploadCompleteSchema.parse(await request.json());
     logger.info("Document complete: body parsed", {
