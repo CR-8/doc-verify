@@ -84,5 +84,11 @@ export const apiClient = {
     }),
   postFormData: <T>(url: string, formData: FormData) =>
     request<T>(url, { method: "POST", body: formData }),
+  patch: <T>(url: string, body?: unknown) =>
+    request<T>(url, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+    }),
   delete: <T>(url: string) => request<T>(url, { method: "DELETE" }),
 };

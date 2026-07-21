@@ -37,6 +37,27 @@ const roleColors: Record<string, string> = {
   viewer: "bg-slate-100 text-slate-700 border-slate-200",
 };
 
+// Firestore timestamps arrive over JSON as {_seconds} objects; normalize
+// those plus ISO strings into something new Date() can parse.
+function toDateInput(value: unknown): string {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "object") {
+    const seconds = (value as { _seconds?: number; seconds?: number });
+    const s = seconds._seconds ?? seconds.seconds;
+    if (typeof s === "number") return new Date(s * 1000).toISOString();
+  }
+  return "";
+}
+
+// No email service is wired up, so "inviting" creates the account directly
+// with a generated temporary password the admin shares with the user.
+function generateTempPassword(): string {
+  const bytes = new Uint8Array(9);
+  crypto.getRandomValues(bytes);
+  return "Dv1-" + btoa(String.fromCharCode(...bytes)).replace(/[+/=]/g, "x");
+}
+
 export default function UsersPage() {
   const [users, setUsers] = React.useState<UserRecord[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -52,13 +73,13 @@ export default function UsersPage() {
         const { data } = await apiClient.get<any>("/api/users");
         const list = Array.isArray(data?.users) ? data.users : Array.isArray(data) ? data : [];
         setUsers(
-          list.map((u: UserRecord) => ({
+          list.map((u: any) => ({
             id: u.id,
-            name: u.name,
-            email: u.email,
-            role: u.role,
-            status: u.status,
-            joinedDate: u.joinedDate ?? u.createdAt ?? "",
+            name: u.displayName || u.name || u.email || "Unknown",
+            email: u.email ?? "",
+            role: u.role || "viewer",
+            status: u.isActive === false ? "inactive" : "active",
+            joinedDate: toDateInput(u.createdAt ?? u.joinedDate),
           }))
         );
       } catch (err) {
@@ -78,13 +99,14 @@ export default function UsersPage() {
     e.preventDefault();
     setInviting(true);
     try {
+      const tempPassword = generateTempPassword();
       const { data: userData } = await apiClient.post<any>("/api/users", {
-        name: inviteName, email: inviteEmail, role: inviteRole,
+        displayName: inviteName, email: inviteEmail, role: inviteRole, password: tempPassword,
       });
       setUsers((prev) => [
         ...prev,
         {
-          id: userData?.user?.id ?? userData?.id ?? String(Date.now()),
+          id: userData?.uid ?? userData?.user?.id ?? userData?.id ?? String(Date.now()),
           name: inviteName,
           email: inviteEmail,
           role: inviteRole,
@@ -96,8 +118,16 @@ export default function UsersPage() {
       setInviteName("");
       setInviteEmail("");
       setInviteRole("viewer");
-    } catch {
-      alert("Failed to invite user");
+      toast({
+        title: "User created",
+        description: `Temporary password for ${inviteEmail}: ${tempPassword} — share it securely; they should change it after first login.`,
+      });
+    } catch (err) {
+      toast({
+        title: "Failed to invite user",
+        description: err instanceof Error ? err.message : undefined,
+        variant: "destructive",
+      });
     } finally {
       setInviting(false);
     }
@@ -106,7 +136,7 @@ export default function UsersPage() {
   async function handleDeactivate(id: string) {
     if (!confirm("Deactivate this user?")) return;
     try {
-      await apiClient.post(`/api/users/${id}/deactivate`);
+      await apiClient.patch(`/api/users/${id}`, { isActive: false });
       setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, status: "inactive" } : u)));
     } catch {
       alert("Failed to deactivate user");

@@ -22,11 +22,14 @@ interface StatusBadgeProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 export function StatusBadge({ status, className, ...props }: StatusBadgeProps) {
-  const variant = statusVariantMap[status.toLowerCase()] ?? "secondary";
+  // Guard against missing status from API responses so one bad record
+  // can't crash the whole page.
+  const safeStatus = typeof status === "string" && status ? status : "unknown";
+  const variant = statusVariantMap[safeStatus.toLowerCase()] ?? "secondary";
 
   return (
     <Badge variant={variant} className={cn("capitalize", className)} {...props}>
-      {status.replace(/_/g, " ")}
+      {safeStatus.replace(/_/g, " ")}
     </Badge>
   );
 }
